@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLA & 내리다 — 연구 보고서</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #08090d;
+    --bg2: #0f1117;
+    --bg3: #161a22;
+    --bg4: #1c2130;
+    --border: rgba(255,255,255,0.06);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8eaf0;
+    --text2: #8a8f9e;
+    --text3: #454b5c;
+    --accent: #6366f1;
+    --accent2: #818cf8;
+    --green: #22c55e;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --yellow: #f59e0b;
+    --purple: #a855f7;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  /* ── COVER ── */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 80px 80px;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cover-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  .cover-glow {
+    position: absolute;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%);
+    top: -200px; right: -100px;
+    pointer-events: none;
+  }
+
+  .cover-glow2 {
+    position: absolute;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(34,197,94,0.05) 0%, transparent 70%);
+    bottom: -100px; left: 100px;
+    pointer-events: none;
+  }
+
+  .cover-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .cover-tag::before {
+    content: '';
+    width: 32px; height: 1px;
+    background: var(--accent2);
+  }
+
+  .cover-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 72px;
+    font-weight: 800;
+    line-height: 1.0;
+    letter-spacing: -2px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .cover-title span {
+    color: var(--accent2);
+  }
+
+  .cover-subtitle {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text2);
+    margin-bottom: 40px;
+    letter-spacing: -0.5px;
+  }
+
+  .cover-desc {
+    max-width: 540px;
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.8;
+    margin-bottom: 48px;
+  }
+
+  .cover-meta {
+    display: flex;
+    gap: 32px;
+    align-items: center;
+  }
+
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .meta-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text3);
+  }
+
+  .meta-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .meta-divider {
+    width: 1px;
+    height: 36px;
+    background: var(--border2);
+  }
+
+  /* ── TOC ── */
+  .toc-page {
+    padding: 80px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 20px;
+  }
+
+  .toc-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 40px;
+    letter-spacing: -0.5px;
+  }
+
+  .toc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-width: 700px;
+  }
+
+  .toc-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .toc-item:hover .toc-item-title { color: var(--accent2); }
+
+  .toc-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text3);
+    min-width: 28px;
+  }
+
+  .toc-item-content { flex: 1; }
+
+  .toc-item-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 2px;
+    transition: color 0.15s;
+  }
+
+  .toc-item-sub {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .toc-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid;
+  }
+
+  /* ── SECTION ── */
+  .section {
+    padding: 80px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    margin-bottom: 48px;
+  }
+
+  .section-num-big {
+    font-family: 'Syne', sans-serif;
+    font-size: 80px;
+    font-weight: 800;
+    color: var(--border2);
+    line-height: 1;
+    letter-spacing: -4px;
+    flex-shrink: 0;
+  }
+
+  .section-header-content {}
+
+  .section-title-big {
+    font-family: 'Syne', sans-serif;
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -1px;
+    line-height: 1.1;
+    margin-bottom: 8px;
+  }
+
+  .section-title-big span { color: var(--accent2); }
+
+  .section-desc {
+    font-size: 13px;
+    color: var(--text2);
+    max-width: 560px;
+    line-height: 1.8;
+  }
+
+  /* ── CONTENT BLOCKS ── */
+  .h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.3px;
+    margin: 40px 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .h2::before {
+    content: '';
+    width: 4px; height: 18px;
+    background: var(--accent);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 24px 0 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    font-size: 11px;
+    color: var(--accent2);
+  }
+
+  p {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.9;
+    margin-bottom: 14px;
+    max-width: 720px;
+  }
+
+  /* ── PHASE TIMELINE ── */
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 24px 0 32px;
+    max-width: 800px;
+  }
+
+  .phase {
+    display: flex;
+    gap: 24px;
+    position: relative;
+  }
+
+  .phase-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .phase-dot {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  .phase-line {
+    width: 1px;
+    flex: 1;
+    min-height: 24px;
+    margin: 4px 0;
+  }
+
+  .phase:last-child .phase-line { display: none; }
+
+  .phase-body {
+    padding-bottom: 28px;
+    flex: 1;
+  }
+
+  .phase-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+    margin-top: 5px;
+  }
+
+  .phase-period {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text3);
+    margin-bottom: 10px;
+  }
+
+  .phase-items {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .phase-item {
+    font-size: 12px;
+    color: var(--text2);
+    padding: 6px 12px;
+    background: var(--bg3);
+    border-radius: 6px;
+    border-left: 2px solid;
+    line-height: 1.5;
+  }
+
+  /* ── PAPER TABLE ── */
+  .paper-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 16px 0 32px;
+    max-width: 800px;
+  }
+
+  .paper-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 16px;
+    align-items: start;
+    padding: 14px 16px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    transition: border-color 0.15s;
+  }
+
+  .paper-item:hover { border-color: var(--border2); }
+
+  .paper-year {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text3);
+    padding-top: 2px;
+    min-width: 36px;
+  }
+
+  .paper-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+
+  .paper-desc {
+    font-size: 11px;
+    color: var(--text2);
+    line-height: 1.5;
+  }
+
+  .paper-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    padding: 3px 7px;
+    border-radius: 4px;
+    white-space: nowrap;
+    align-self: start;
+  }
+
+  /* ── COMPARISON TABLE ── */
+  .table-wrap {
+    overflow-x: auto;
+    margin: 16px 0 32px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  thead tr {
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border2);
+  }
+
+  th {
+    text-align: left;
+    padding: 12px 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text3);
+    font-weight: 500;
+  }
+
+  td {
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text2);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg3); }
+
+  td:first-child { color: var(--text); font-weight: 600; font-size: 12px; }
+
+  /* ── HIGHLIGHT BOX ── */
+  .highlight-box {
+    padding: 20px 24px;
+    border-radius: 10px;
+    border-left: 3px solid;
+    margin: 20px 0;
+    max-width: 760px;
+  }
+
+  .highlight-box .hb-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  .highlight-box p {
+    margin-bottom: 0;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  /* ── ARCH DIAGRAM ── */
+  .arch-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text2);
+    line-height: 2;
+    margin: 16px 0 28px;
+    max-width: 640px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  /* ── IDEA ROADMAP ── */
+  .roadmap {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 20px 0 32px;
+  }
+
+  .roadmap-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .roadmap-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .roadmap-step {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .roadmap-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+
+  .roadmap-items {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 12px;
+  }
+
+  .roadmap-item {
+    font-size: 11px;
+    color: var(--text2);
+    padding: 5px 10px;
+    background: var(--bg3);
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .roadmap-item::before {
+    content: '›';
+    color: var(--text3);
+  }
+
+  /* ── EVAL BOX ── */
+  .eval-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin: 20px 0 32px;
+  }
+
+  .eval-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .eval-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .eval-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.5;
+  }
+
+  .eval-item:last-child { border-bottom: none; }
+
+  .eval-icon { flex-shrink: 0; margin-top: 1px; }
+
+  /* ── FOOTER ── */
+  .footer {
+    padding: 40px 80px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid var(--border);
+  }
+
+  .footer-logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text3);
+  }
+
+  .footer-info {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text3);
+    text-align: right;
+    line-height: 1.6;
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 32px 0;
+    max-width: 760px;
+  }
+
+  /* ── PILL ── */
+  .pill {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+
+  .c-accent { color: var(--accent2); }
+  .c-green { color: var(--green); }
+  .c-red { color: var(--red); }
+  .c-yellow { color: var(--yellow); }
+  .c-blue { color: var(--blue); }
+  .c-purple { color: var(--purple); }
+
+  /* ── PRINT-LIKE PAGES ── */
+  @media print {
+    .section { page-break-before: always; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════ COVER ════════════════════════════ -->
+<div class="cover">
+  <div class="cover-grid"></div>
+  <div class="cover-glow"></div>
+  <div class="cover-glow2"></div>
+
+  <div class="cover-tag">Research Report · 2025</div>
+
+  <div class="cover-title">VLA & <span>내리다</span></div>
+  <div class="cover-subtitle">Vision-Language-Action 연구 및 사업 아이디어 종합 보고서</div>
+
+  <div class="cover-desc">
+    차량 VLA 공부 계획부터 일반 로봇에서의 VLA 기술 동향,
+    그리고 이동형 전기차 충전 로봇 서비스 「내리다」 아이디어까지 —
+    세 가지 주제를 체계적으로 정리한 종합 보고서입니다.
+  </div>
+
+  <div class="cover-meta">
+    <div class="meta-item">
+      <div class="meta-label">Topics</div>
+      <div class="meta-val">3 Sections</div>
+    </div>
+    <div class="meta-divider"></div>
+    <div class="meta-item">
+      <div class="meta-label">Focus</div>
+      <div class="meta-val">VLA · EV Charging</div>
+    </div>
+    <div class="meta-divider"></div>
+    <div class="meta-item">
+      <div class="meta-label">Status</div>
+      <div class="meta-val">Ideation Phase</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════ TOC ════════════════════════════ -->
+<div class="toc-page">
+  <div class="section-eyebrow">Table of Contents</div>
+  <div class="toc-title">목차</div>
+
+  <div class="toc-list">
+    <div class="toc-item">
+      <div class="toc-num">01</div>
+      <div class="toc-item-content">
+        <div class="toc-item-title">차량 VLA 공부 계획</div>
+        <div class="toc-item-sub">자율주행 특화 VLA 학습 로드맵 · 4단계 · 5개월 과정</div>
+      </div>
+      <div class="toc-tag" style="border-color:rgba(99,102,241,0.3);color:var(--accent2);">Study Plan</div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">02</div>
+      <div class="toc-item-content">
+        <div class="toc-item-title">로봇 VLA 기술 동향</div>
+        <div class="toc-item-sub">핵심 논문 · 아키텍처 · 최신 트렌드 · 실습 로드맵</div>
+      </div>
+      <div class="toc-tag" style="border-color:rgba(34,197,94,0.3);color:var(--green);">Technology</div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">03</div>
+      <div class="toc-item-content">
+        <div class="toc-item-title">「내리다」 사업 아이디어</div>
+        <div class="toc-item-sub">이동형 전기차 충전 로봇 · 비즈니스 모델 · 가능성 평가</div>
+      </div>
+      <div class="toc-tag" style="border-color:rgba(245,158,11,0.3);color:var(--yellow);">Business Idea</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════ SECTION 01 ════════════════════════════ -->
+<div class="section" id="sec1">
+  <div class="section-header">
+    <div class="section-num-big">01</div>
+    <div class="section-header-content">
+      <div class="section-eyebrow">Study Roadmap</div>
+      <div class="section-title-big">차량 <span>VLA</span> 공부 계획</div>
+      <div class="section-desc">
+        자율주행 특화 VLA를 체계적으로 학습하기 위한 4단계 로드맵.
+        기초 ML부터 핵심 논문 리딩, 실제 시뮬레이터 실습까지 약 4~5개월 과정으로 설계되어 있습니다.
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">4단계 학습 로드맵</div>
+
+  <div class="timeline">
+
+    <div class="phase">
+      <div class="phase-left">
+        <div class="phase-dot" style="background:rgba(99,102,241,0.15);color:var(--accent2);">P1</div>
+        <div class="phase-line" style="background:var(--border)"></div>
+      </div>
+      <div class="phase-body">
+        <div class="phase-title">Phase 1 — 기초 다지기</div>
+        <div class="phase-period">약 4~6주 / 수학 · 딥러닝 기초</div>
+        <div class="phase-items">
+          <div class="phase-item" style="border-color:var(--accent)">Linear Algebra, Probability 복습 (3Blue1Brown, Khan Academy)</div>
+          <div class="phase-item" style="border-color:var(--accent)">PyTorch 기초 — 직접 코딩으로 체득</div>
+          <div class="phase-item" style="border-color:var(--accent)">CNN · RNN/LSTM · Attention Mechanism 개념 정리</div>
+          <div class="phase-item" style="border-color:var(--accent)">추천 강의: Stanford CS231n, Andrej Karpathy 유튜브</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-left">
+        <div class="phase-dot" style="background:rgba(59,130,246,0.15);color:var(--blue);">P2</div>
+        <div class="phase-line" style="background:var(--border)"></div>
+      </div>
+      <div class="phase-body">
+        <div class="phase-title">Phase 2 — Transformer & Foundation Model</div>
+        <div class="phase-period">약 4~6주 / 핵심 논문 4편</div>
+        <div class="phase-items">
+          <div class="phase-item" style="border-color:var(--blue)">Attention Is All You Need (2017) — Transformer 원조</div>
+          <div class="phase-item" style="border-color:var(--blue)">CLIP (2021) — Vision-Language 연결 방식</div>
+          <div class="phase-item" style="border-color:var(--blue)">Flamingo (2022) — 멀티모달 기초</div>
+          <div class="phase-item" style="border-color:var(--blue)">LLaVA (2023) — 오픈소스 VLM 실습 가능</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-left">
+        <div class="phase-dot" style="background:rgba(34,197,94,0.15);color:var(--green);">P3</div>
+        <div class="phase-line" style="background:var(--border)"></div>
+      </div>
+      <div class="phase-body">
+        <div class="phase-title">Phase 3 — 차량 VLA 핵심 논문 집중</div>
+        <div class="phase-period">약 6~8주 / 자율주행 특화 논문</div>
+        <div class="phase-items">
+          <div class="phase-item" style="border-color:var(--green)">RT-2 (Google, 2023) — VLM → Action 출력, VLA의 시초</div>
+          <div class="phase-item" style="border-color:var(--green)">OpenDriveVLA (2024) — 자율주행 특화 VLA</div>
+          <div class="phase-item" style="border-color:var(--green)">DriveVLM (2024) — 주행 장면 이해 + 플래닝</div>
+          <div class="phase-item" style="border-color:var(--green)">DriveLM (2024) — 언어 기반 주행 의사결정</div>
+          <div class="phase-item" style="border-color:var(--green)">UniAD (2023) — End-to-End 자율주행 통합 구조</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-left">
+        <div class="phase-dot" style="background:rgba(245,158,11,0.15);color:var(--yellow);">P4</div>
+      </div>
+      <div class="phase-body">
+        <div class="phase-title">Phase 4 — 실습 & 환경 세팅</div>
+        <div class="phase-period">병행 진행 / 시뮬레이터 + 데이터셋</div>
+        <div class="phase-items">
+          <div class="phase-item" style="border-color:var(--yellow)">데이터셋: nuScenes, Waymo Open Dataset, OpenDV-2K</div>
+          <div class="phase-item" style="border-color:var(--yellow)">시뮬레이터: CARLA (자율주행 정책 테스트), nuPlan (플래닝 벤치마크)</div>
+          <div class="phase-item" style="border-color:var(--yellow)">실습: LLaVA로 주행 장면 QA 파인튜닝 · nuScenes 장면 설명 생성</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="h2">주간 학습 루틴</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>요일</th>
+          <th>활동</th>
+          <th>예상 시간</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>월 · 수</td><td>논문 1편 읽기 + 핵심 요약 정리</td><td>2~3시간</td></tr>
+        <tr><td>화 · 목</td><td>코딩 실습 / 구현 실험</td><td>2~3시간</td></tr>
+        <tr><td>금</td><td>관련 유튜브 · 블로그 서베이</td><td>1~2시간</td></tr>
+        <tr><td>주말</td><td>프로젝트 작업 또는 복습</td><td>자유</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="highlight-box" style="background:rgba(99,102,241,0.06);border-color:var(--accent);">
+    <div class="hb-title c-accent">추천 리소스</div>
+    <p>논문 트래킹: ar5iv.org, Papers With Code (autonomous driving 필터) · 커뮤니티: Hugging Face, awesome-autonomous-driving GitHub · 유튜브: Yannic Kilcher (논문 리뷰), Two Minute Papers</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════ SECTION 02 ════════════════════════════ -->
+<div class="section" id="sec2">
+  <div class="section-header">
+    <div class="section-num-big">02</div>
+    <div class="section-header-content">
+      <div class="section-eyebrow">Technology Overview</div>
+      <div class="section-title-big">로봇 <span>VLA</span> 기술 동향</div>
+      <div class="section-desc">
+        Vision + Language + Action을 하나의 모델로 통합하는 VLA의 개념, 핵심 논문 흐름,
+        아키텍처 구조, 주요 모델 비교 및 2024~2025 최신 트렌드를 정리합니다.
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">VLA란 무엇인가</div>
+  <p>VLA는 Vision(시각) + Language(언어) + Action(행동)을 하나의 모델로 통합한 구조입니다. 기존 로보틱스는 인식 → 계획 → 제어를 각각 별개 모듈로 설계했지만, VLA는 이를 하나의 거대 모델로 End-to-End 처리합니다.</p>
+
+  <div class="arch-box">카메라 이미지 ──┐
+                  ├──► [Foundation Model] ──► 로봇 행동 (관절 각도, 그리퍼 등)
+자연어 명령   ──┘</div>
+
+  <div class="h2">핵심 논문 흐름 (시간순)</div>
+
+  <div class="paper-list">
+    <div class="paper-item">
+      <div class="paper-year">2022</div>
+      <div>
+        <div class="paper-name">SayCan — Google</div>
+        <div class="paper-desc">LLM + 로봇의 첫 결합 시도. LLM이 계획하고 별도 모델이 실행. 분리 구조의 비효율이 한계.</div>
+      </div>
+      <div class="paper-badge" style="background:rgba(99,102,241,0.1);color:var(--accent2);border:1px solid rgba(99,102,241,0.2);">Foundation</div>
+    </div>
+    <div class="paper-item">
+      <div class="paper-year">2022</div>
+      <div>
+        <div class="paper-name">RT-1 — Google Robotics</div>
+        <div class="paper-desc">130,000개 실제 로봇 시연 데이터로 학습. Transformer 기반 이미지 + 언어 → 행동. 최초의 실용적 대규모 로봇 정책 모델.</div>
+      </div>
+      <div class="paper-badge" style="background:rgba(59,130,246,0.1);color:var(--blue);border:1px solid rgba(59,130,246,0.2);">Milestone</div>
+    </div>
+    <div class="paper-item">
+      <div class="paper-year">2023</div>
+      <div>
+        <div class="paper-name">RT-2 — Google DeepMind ⭐</div>
+        <div class="paper-desc">VLA의 이정표. PaLI-X 55B 위에 로봇 행동 데이터를 파인튜닝. 행동을 텍스트 토큰처럼 표현. 웹 상식을 로봇에 직접 전이.</div>
+      </div>
+      <div class="paper-badge" style="background:rgba(34,197,94,0.1);color:var(--green);border:1px solid rgba(34,197,94,0.2);">Must Read</div>
+    </div>
+    <div class="paper-item">
+      <div class="paper-year">2023</div>
+      <div>
+        <div class="paper-name">OpenVLA — Stanford ⭐</div>
+        <div class="paper-desc">RT-2의 오픈소스 버전. LLaMA 2 7B 기반. Open X-Embodiment 데이터셋으로 학습. 누구나 재현 가능.</div>
+      </div>
+      <div class="paper-badge" style="background:rgba(34,197,94,0.1);color:var(--green);border:1px solid rgba(34,197,94,0.2);">Open Source</div>
+    </div>
+    <div class="paper-item">
+      <div class="paper-year">2024</div>
+      <div>
+        <div class="paper-name">π0 / pi-zero — Physical Intelligence ⭐⭐</div>
+        <div class="paper-desc">현재 가장 주목받는 범용 로봇 VLA. Flow Matching 기반 연속 행동 출력. 휴머노이드·팔·손 등 다양한 로봇 형태 지원.</div>
+      </div>
+      <div class="paper-badge" style="background:rgba(168,85,247,0.1);color:var(--purple);border:1px solid rgba(168,85,247,0.2);">SOTA</div>
+    </div>
+  </div>
+
+  <div class="h2">행동(Action) 표현 방식</div>
+
+  <div class="eval-grid">
+    <div class="eval-card">
+      <div class="eval-label c-blue">방법 1 — 이산 토큰화 (RT-2 방식)</div>
+      <div class="eval-item"><span class="eval-icon">⚙️</span><span>관절 각도 값을 256개 빈으로 양자화 → 텍스트 토큰처럼 예측</span></div>
+      <div class="eval-item"><span class="eval-icon c-green">✓</span><span>LLM 구조 그대로 활용 가능</span></div>
+      <div class="eval-item"><span class="eval-icon c-red">✗</span><span>연속적 움직임 표현력에 한계</span></div>
+    </div>
+    <div class="eval-card">
+      <div class="eval-label c-purple">방법 2 — 연속 행동 (Diffusion / Flow Matching)</div>
+      <div class="eval-item"><span class="eval-icon">⚙️</span><span>π0, Diffusion Policy 등에서 사용</span></div>
+      <div class="eval-item"><span class="eval-icon c-green">✓</span><span>섬세하고 연속적인 동작 표현 가능</span></div>
+      <div class="eval-item"><span class="eval-icon c-red">✗</span><span>구조가 더 복잡하고 학습 비용 높음</span></div>
+    </div>
+  </div>
+
+  <div class="h2">핵심 개념 5가지</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>개념</th><th>설명</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Embodiment Gap</td><td>웹 데이터로 학습한 VLM을 로봇에 적용 시 현실 물리 세계와 생기는 괴리. 핵심 연구 과제.</td></tr>
+        <tr><td>Cross-Embodiment 학습</td><td>서로 다른 형태의 로봇 데이터를 함께 학습해 일반화 성능 향상. Open X-Embodiment 데이터셋이 대표적.</td></tr>
+        <tr><td>Chunk Action</td><td>매 스텝 예측 대신 여러 스텝을 묶어 한 번에 예측. 지연(latency) 문제 해결. ACT, Diffusion Policy에서 사용.</td></tr>
+        <tr><td>In-Context Learning</td><td>소수 시연 예시만 컨텍스트로 넣으면 새 태스크 수행 — 파인튜닝 없이. GPT few-shot과 동일 원리.</td></tr>
+        <tr><td>World Model</td><td>행동 전 "이렇게 하면 어떻게 될까"를 내부 시뮬레이션. VLA와 결합 시 더 안전하고 계획적인 행동 가능.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="h2">주요 모델 비교</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>모델</th><th>기관</th><th>베이스 모델</th><th>행동 표현</th><th>특징</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>RT-1</td><td>Google</td><td>Transformer</td><td>이산</td><td>대규모 데이터, 실용적</td></tr>
+        <tr><td>RT-2</td><td>Google</td><td>PaLI-X 55B</td><td>이산 토큰</td><td>웹 지식 전이</td></tr>
+        <tr><td>OpenVLA</td><td>Stanford</td><td>LLaMA 2 7B</td><td>이산 토큰</td><td>오픈소스 재현 가능</td></tr>
+        <tr><td>Octo</td><td>Berkeley</td><td>Transformer</td><td>연속</td><td>경량, 범용</td></tr>
+        <tr><td>π0</td><td>Physical Intelligence</td><td>VLM + Flow</td><td>연속</td><td>현재 SOTA급</td></tr>
+        <tr><td>RoboFlamingo</td><td>여러 기관</td><td>Flamingo</td><td>이산</td><td>few-shot 특화</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="h2">2024~2025 최신 트렌드</div>
+  <div class="eval-grid">
+    <div class="eval-card">
+      <div class="eval-label c-accent">주요 동향</div>
+      <div class="eval-item"><span>🦾</span><span>휴머노이드 + VLA — Figure, 1X, Unitree 등에 탑재 시도 활발</span></div>
+      <div class="eval-item"><span>🌊</span><span>Diffusion Policy 부상 — 연속적·섬세한 조작 태스크에서 강세</span></div>
+      <div class="eval-item"><span>📉</span><span>데이터 효율 — 적은 시연으로 빠르게 새 태스크 학습하는 연구 급증</span></div>
+      <div class="eval-item"><span>👆</span><span>멀티모달 피드백 — 촉각(tactile) 센서 + VLA 결합 연구 시작</span></div>
+    </div>
+    <div class="eval-card">
+      <div class="eval-label c-green">실습 로드맵</div>
+      <div class="eval-item"><span>1️⃣</span><span>OpenVLA 코드 클론 & 추론 실행 (1~2주)</span></div>
+      <div class="eval-item"><span>2️⃣</span><span>LIBERO 벤치마크로 성능 평가 (1주)</span></div>
+      <div class="eval-item"><span>3️⃣</span><span>LoRA로 커스텀 태스크 파인튜닝 (2~3주)</span></div>
+      <div class="eval-item"><span>4️⃣</span><span>IsaacGym / MuJoCo / RoboSuite 연동 (2주)</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════ SECTION 03 ════════════════════════════ -->
+<div class="section" id="sec3">
+  <div class="section-header">
+    <div class="section-num-big">03</div>
+    <div class="section-header-content">
+      <div class="section-eyebrow">Business Idea</div>
+      <div class="section-title-big">「<span>내리다</span>」</div>
+      <div class="section-desc">
+        이동형 전기차 충전 로봇 서비스. 충전기가 차에게 찾아가는 패러다임 전환.
+        레일 기반 로봇이 호출 위치까지 이동해 자동으로 충전을 수행합니다.
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">핵심 컨셉</div>
+
+  <div class="highlight-box" style="background:rgba(245,158,11,0.06);border-color:var(--yellow);">
+    <div class="hb-title c-yellow">한 줄 피칭</div>
+    <p>우버는 휴대폰으로 드라이버를 불러 목적지까지 이동했다면, <strong style="color:var(--text)">내리다는 휴대폰으로 충전 로봇을 불러 내가 있는 자리에서 바로 충전한다.</strong></p>
+  </div>
+
+  <div class="h2">3단계 비즈니스 로드맵</div>
+
+  <div class="roadmap">
+    <div class="roadmap-card">
+      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--blue)"></div>
+      <div class="roadmap-step c-blue">단기 · MVP</div>
+      <div class="roadmap-title">레일 + 호스 방식</div>
+      <p style="font-size:11px;color:var(--text2);margin:0">사람이 직접 플러그를 꽂는 방식. 기술 허들 최소화, 빠른 시장 진입.</p>
+      <div class="roadmap-items">
+        <div class="roadmap-item">앱으로 로봇 호출</div>
+        <div class="roadmap-item">천장 레일 타고 주차 구역 이동</div>
+        <div class="roadmap-item">충전 호스 하강</div>
+        <div class="roadmap-item">사용자가 직접 꽂고 충전</div>
+      </div>
+    </div>
+
+    <div class="roadmap-card">
+      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--green)"></div>
+      <div class="roadmap-step c-green">중기 · 자동화</div>
+      <div class="roadmap-title">로봇팔 자동 충전</div>
+      <p style="font-size:11px;color:var(--text2);margin:0">카메라 내장 로봇팔이 포트를 인식해 자동 체결. 완전 무인 충전 구현.</p>
+      <div class="roadmap-items">
+        <div class="roadmap-item">로봇팔 장착</div>
+        <div class="roadmap-item">Vision으로 충전 포트 인식</div>
+        <div class="roadmap-item">자동 플러그 체결</div>
+        <div class="roadmap-item">충전 완료 후 자동 철수</div>
+      </div>
+    </div>
+
+    <div class="roadmap-card">
+      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--yellow)"></div>
+      <div class="roadmap-step c-yellow">장기 · 에이전트</div>
+      <div class="roadmap-title">차량-로봇 에이전트 통신</div>
+      <p style="font-size:11px;color:var(--text2);margin:0">차량이 스스로 충전 필요 시점을 판단해 로봇 에이전트를 자동 호출.</p>
+      <div class="roadmap-items">
+        <div class="roadmap-item">차량 에이전트 배터리 모니터링</div>
+        <div class="roadmap-item">자동 로봇 호출 요청</div>
+        <div class="roadmap-item">사용자 개입 제로</div>
+        <div class="roadmap-item">공유 차량 생태계 연동</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">VLA 기술과의 연결점</div>
+  <p>2단계 로봇팔 자동 충전에서 VLA 기술이 핵심 역할을 합니다. 차량마다 충전 포트 위치·커버 형태·주차 각도가 다르기 때문에, 이를 실시간 인식하고 조작하는 능력이 필요합니다.</p>
+
+  <div class="arch-box">카메라로 충전 포트 위치 인식 (Vision)
+"포트 커버를 열고 플러그를 꽂아" (Language)
+로봇팔 제어 → 체결 (Action)
+
+→ 이것이 정확히 VLA가 필요한 지점</div>
+
+  <div class="h2">가능성 평가</div>
+  <div class="eval-grid">
+    <div class="eval-card">
+      <div class="eval-label c-green">✅ 강점 & 기회</div>
+      <div class="eval-item"><span class="eval-icon">🎯</span><span>문제 정의가 정확 — 충전기 앞에 차를 세워야 하는 본질적 불편 해소</span></div>
+      <div class="eval-item"><span class="eval-icon">🔄</span><span>패러다임 전환 — "충전기가 차에게 찾아온다"는 새로운 관점</span></div>
+      <div class="eval-item"><span class="eval-icon">🧩</span><span>단계적 로드맵 — 기술 리스크를 분산하며 초기 수익 창출 가능</span></div>
+      <div class="eval-item"><span class="eval-icon">🏗️</span><span>레일 방식 — 바닥 이동 대비 충돌·공간 점유 문제 없음</span></div>
+      <div class="eval-item"><span class="eval-icon">⏰</span><span>타이밍 — EV 보급 임계점 + 로봇팔 비용 급락 시점이 교차</span></div>
+    </div>
+    <div class="eval-card">
+      <div class="eval-label c-red">⚠️ 과제 & 리스크</div>
+      <div class="eval-item"><span class="eval-icon">🏢</span><span>B2B 영업 허들 — 건물주 동의 + 소방·건축 인허가 필수</span></div>
+      <div class="eval-item"><span class="eval-icon">🔌</span><span>충전 포트 인식 난이도 — 차종별 위치·형태 상이, 기술 핵심</span></div>
+      <div class="eval-item"><span class="eval-icon">🚗</span><span>충전 중 차량 이동 안전 프로토콜 설계 필요</span></div>
+      <div class="eval-item"><span class="eval-icon">🏭</span><span>하드웨어 수급 — 레일·로봇 직접 제조 vs OEM 조달 결정 필요</span></div>
+    </div>
+  </div>
+
+  <div class="h2">수익 구조</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>수익원</th><th>방식</th><th>비고</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>충전 단가 마진</td><td>kWh당 마진 취득</td><td>가장 직접적인 수익</td></tr>
+        <tr><td>SaaS 구독</td><td>주차장 운영사에 월정액</td><td>안정적 recurring 수익</td></tr>
+        <tr><td>설치비</td><td>레일·로봇 초기 설치</td><td>초기 현금 흐름</td></tr>
+        <tr><td>충전 데이터</td><td>패턴 데이터 B2B 판매</td><td>장기 부가 수익</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="highlight-box" style="background:rgba(99,102,241,0.06);border-color:var(--accent);">
+    <div class="hb-title c-accent">다음 단계 제안</div>
+    <p>① 파일럿 장소 확보 — 신축 복합몰 또는 기업 사옥 주차장 (설계 단계부터 레일 포함 가능). ② 하드웨어 수급 전략 결정 — 직접 제조 vs OEM 조달. ③ MVP 제작 비용 산정 — 1단계(사람이 꽂는 버전) 기준 견적 확보.</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════ FOOTER ════════════════════════════ -->
+<div class="footer">
+  <div class="footer-logo">VLA & 내리다 Research Report</div>
+  <div class="footer-info">
+    Sections: 3 · Topics: VLA Study · Robot VLA · Business Idea<br>
+    Generated by Claude · 2025
+  </div>
+</div>
+
+</body>
+</html>

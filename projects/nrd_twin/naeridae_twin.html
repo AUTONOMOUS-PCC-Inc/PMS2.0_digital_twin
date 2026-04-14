@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>내리다 디지털 트윈 — 경로 최적화 엔진</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #050709;
+  --bg2:    #0b0f15;
+  --bg3:    #111820;
+  --bg4:    #192130;
+  --border: rgba(0,230,255,0.07);
+  --b2:     rgba(0,230,255,0.18);
+  --cyan:   #00e5ff;
+  --green:  #00ff88;
+  --orange: #ff9500;
+  --red:    #ff3322;
+  --text:   #b8ccd8;
+  --text2:  #506070;
+  --text3:  #243040;
+  --sw: 290px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; }
+body {
+  font-family: 'IBM Plex Mono', monospace;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+}
+
+/* ─── SIDEBAR ─────────────────────────────── */
+.sb {
+  width: var(--sw);
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.sb::-webkit-scrollbar { width: 3px; }
+.sb::-webkit-scrollbar-thumb { background: var(--b2); border-radius: 2px; }
+
+.logo {
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(135deg, rgba(0,229,255,0.04), transparent);
+}
+.logo-main {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--cyan);
+  letter-spacing: -0.5px;
+}
+.logo-tag {
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--text2);
+  margin-top: 4px;
+}
+.logo-ver {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 8px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  color: var(--text2);
+}
+
+.sc { padding: 14px 14px 10px; border-bottom: 1px solid var(--border); }
+.sc-lbl {
+  font-size: 8px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 10px;
+}
+
+/* Algorithm buttons */
+.algo-list { display: flex; flex-direction: column; gap: 5px; }
+.algo-btn {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  transition: all 0.15s;
+  color: var(--text2);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  width: 100%;
+  text-align: left;
+}
+.algo-btn:hover { border-color: var(--b2); color: var(--text); background: var(--bg4); }
+.algo-btn.active { border-color: var(--cyan); color: var(--cyan); background: rgba(0,229,255,0.06); }
+.algo-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.algo-tag { margin-left: auto; font-size: 8px; padding: 1px 5px; border-radius: 3px; border: 1px solid currentColor; opacity: 0.6; }
+
+/* Controls */
+.ctrl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 6px; }
+.btn {
+  padding: 9px 10px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-run  { background: var(--cyan); color: #050709; }
+.btn-run:hover  { background: #00ccee; }
+.btn-run.paused { background: rgba(0,229,255,0.15); color: var(--cyan); border: 1px solid var(--b2); }
+.btn-reset { background: var(--bg3); border: 1px solid var(--b2); color: var(--text); }
+.btn-reset:hover { background: var(--bg4); }
+.btn-req  { width: 100%; background: rgba(255,51,34,0.12); border: 1px solid rgba(255,51,34,0.3); color: var(--red); margin-bottom: 5px; }
+.btn-req:hover  { background: rgba(255,51,34,0.2); }
+.btn-req3 { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); }
+.btn-req3:hover { background: var(--bg4); color: var(--text); }
+
+/* Speed slider */
+.sl-wrap { margin-top: 10px; }
+.sl-row  { display: flex; justify-content: space-between; font-size: 9px; color: var(--text2); margin-bottom: 5px; }
+input[type=range] {
+  width: 100%; -webkit-appearance: none;
+  height: 3px; background: var(--bg3); border-radius: 2px; outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 13px; height: 13px;
+  border-radius: 50%; background: var(--cyan); cursor: pointer;
+}
+
+/* Stats */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.stat-card {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 10px;
+}
+.stat-val { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; color: var(--cyan); line-height:1; }
+.stat-lbl { font-size: 8px; color: var(--text3); margin-top: 4px; letter-spacing: 0.5px; }
+.eff-wrap { margin-top: 10px; }
+.eff-row  { display: flex; justify-content: space-between; font-size: 9px; color: var(--text2); margin-bottom: 4px; }
+.eff-bar  { height: 3px; background: var(--bg3); border-radius: 2px; }
+.eff-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width .6s; }
+
+/* Legend */
+.leg { display: flex; flex-direction: column; gap: 7px; }
+.leg-item { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--text2); }
+.leg-box  { width: 16px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+/* Queue */
+.q-wrap { display: flex; align-items: center; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+.q-dot  { width: 9px; height: 9px; border-radius: 2px; background: var(--red); }
+.q-dot.charging { background: var(--orange); }
+
+/* ─── CANVAS AREA ─────────────────────────── */
+.canvas-area { flex: 1; position: relative; overflow: hidden; }
+canvas { display: block; }
+
+/* HUD */
+.hud {
+  position: absolute; top: 14px; right: 14px;
+  background: rgba(5,7,9,0.85);
+  border: 1px solid var(--b2);
+  border-radius: 8px;
+  padding: 12px 15px;
+  min-width: 185px;
+  backdrop-filter: blur(12px);
+}
+.hud-title { font-size: 7px; letter-spacing: 2.5px; text-transform: uppercase; color: var(--text3); margin-bottom: 9px; }
+.hud-row { display: flex; justify-content: space-between; gap: 16px; font-size: 10px; color: var(--text2); margin-bottom: 5px; }
+.hud-val { color: var(--cyan); font-weight: 500; }
+
+/* Algo comparison bar */
+.cmp-wrap {
+  position: absolute; top: 14px; left: 14px;
+  background: rgba(5,7,9,0.85);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 13px;
+  min-width: 170px;
+  backdrop-filter: blur(12px);
+}
+.cmp-title { font-size: 7px; letter-spacing: 2px; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
+.cmp-row { margin-bottom: 7px; }
+.cmp-lbl { font-size: 9px; color: var(--text2); margin-bottom: 3px; display: flex; justify-content: space-between; }
+.cmp-bar { height: 4px; background: var(--bg3); border-radius: 2px; }
+.cmp-fill { height: 100%; border-radius: 2px; transition: width .5s; }
+
+/* Status bar */
+.status {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(5,7,9,0.92);
+  border-top: 1px solid var(--border);
+  padding: 7px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+  color: var(--text2);
+  backdrop-filter: blur(10px);
+}
+.sdot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.sdot.idle     { background: var(--text3); }
+.sdot.active   { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse .9s infinite; }
+.sdot.moving   { background: var(--cyan);  box-shadow: 0 0 6px var(--cyan); }
+.sdot.charging { background: var(--orange); box-shadow: 0 0 6px var(--orange); animation: pulse .5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+.hint { margin-left: auto; font-size: 9px; color: var(--text3); }
+</style>
+</head>
+<body>
+
+<!-- ─── SIDEBAR ────────────────────────────── -->
+<aside class="sb">
+  <div class="logo">
+    <div class="logo-main">내리다 DT</div>
+    <div class="logo-tag">Digital Twin · Path Optimizer</div>
+    <div class="logo-ver">v0.1-alpha · EV Charging Robot</div>
+  </div>
+
+  <div class="sc">
+    <div class="sc-lbl">경로 탐색 알고리즘</div>
+    <div class="algo-list">
+      <button class="algo-btn active" id="algoA" onclick="setAlgo('astar',this)">
+        <div class="algo-dot" style="background:#00e5ff"></div>
+        A* (A-Star)
+        <span class="algo-tag">최적 경로</span>
+      </button>
+      <button class="algo-btn" id="algoD" onclick="setAlgo('dijkstra',this)">
+        <div class="algo-dot" style="background:#ffaa00"></div>
+        Dijkstra
+        <span class="algo-tag">완전 탐색</span>
+      </button>
+      <button class="algo-btn" id="algoG" onclick="setAlgo('greedy',this)">
+        <div class="algo-dot" style="background:#ff6600"></div>
+        Greedy BFS
+        <span class="algo-tag">고속 탐색</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="sc">
+    <div class="sc-lbl">시뮬레이션 제어</div>
+    <div class="ctrl-grid">
+      <button class="btn btn-run" id="runBtn" onclick="toggleRun()">▶ 실행</button>
+      <button class="btn btn-reset" onclick="resetSim()">↺ 리셋</button>
+    </div>
+    <button class="btn btn-req" onclick="addRequest()">⚡ 충전 요청 추가 (+1)</button>
+    <button class="btn btn-req3" onclick="addMulti()">⚡⚡⚡ 랜덤 요청 (+3)</button>
+    <div class="sl-wrap">
+      <div class="sl-row"><span>시뮬레이션 속도</span><span id="spLbl">2×</span></div>
+      <input type="range" id="spSlider" min="0.5" max="8" step="0.5" value="2" oninput="setSpeed(this.value)">
+    </div>
+    <!-- Queue indicator -->
+    <div id="qWrap" class="q-wrap"></div>
+  </div>
+
+  <div class="sc">
+    <div class="sc-lbl">실시간 통계</div>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-val" id="sPath">0.0</div>
+        <div class="stat-lbl">경로 길이 (m)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="sNodes">0</div>
+        <div class="stat-lbl">탐색 노드 수</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="sTime">0.0</div>
+        <div class="stat-lbl">계산 시간 (ms)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="sDone">0</div>
+        <div class="stat-lbl">완료 충전 수</div>
+      </div>
+    </div>
+    <div class="eff-wrap">
+      <div class="eff-row"><span>알고리즘 효율 점수</span><span id="effVal" style="color:var(--green)">—</span></div>
+      <div class="eff-bar"><div class="eff-fill" id="effBar" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="sc">
+    <div class="sc-lbl">범례</div>
+    <div class="leg">
+      <div class="leg-item"><div class="leg-box" style="background:#00e5ff;box-shadow:0 0 5px #00e5ff"></div>충전 로봇 (이동 중)</div>
+      <div class="leg-item"><div class="leg-box" style="background:#00ff88"></div>최적 경로 라인</div>
+      <div class="leg-item"><div class="leg-box" style="background:#ffaa00"></div>A* 열린 집합 노드</div>
+      <div class="leg-item"><div class="leg-box" style="background:rgba(255,80,0,0.55)"></div>A* 닫힌 집합 노드</div>
+      <div class="leg-item"><div class="leg-box" style="background:#ff3322"></div>충전 요청 차량</div>
+      <div class="leg-item"><div class="leg-box" style="background:#4499ff"></div>충전 중 차량</div>
+      <div class="leg-item"><div class="leg-box" style="background:#119944"></div>충전 완료 차량</div>
+    </div>
+  </div>
+</aside>
+
+<!-- ─── CANVAS AREA ────────────────────────── -->
+<div class="canvas-area" id="cArea">
+
+  <!-- HUD: Robot state -->
+  <div class="hud">
+    <div class="hud-title">로봇 실시간 상태</div>
+    <div class="hud-row"><span>현재 위치</span><span class="hud-val" id="hPos">(0, 0)</span></div>
+    <div class="hud-row"><span>목표 위치</span><span class="hud-val" id="hTgt">—</span></div>
+    <div class="hud-row"><span>대기 요청</span><span class="hud-val" id="hQ">0</span></div>
+    <div class="hud-row"><span>상태</span><span class="hud-val" id="hState">대기중</span></div>
+    <div class="hud-row"><span>세그먼트</span><span class="hud-val" id="hSeg">0/0</span></div>
+  </div>
+
+  <!-- Algorithm comparison -->
+  <div class="cmp-wrap">
+    <div class="cmp-title">알고리즘 비교</div>
+    <div class="cmp-row">
+      <div class="cmp-lbl"><span>A*</span><span id="cA">—</span></div>
+      <div class="cmp-bar"><div class="cmp-fill" id="cAb" style="width:0%;background:#00e5ff"></div></div>
+    </div>
+    <div class="cmp-row">
+      <div class="cmp-lbl"><span>Dijkstra</span><span id="cD">—</span></div>
+      <div class="cmp-bar"><div class="cmp-fill" id="cDb" style="width:0%;background:#ffaa00"></div></div>
+    </div>
+    <div class="cmp-row" style="margin-bottom:0">
+      <div class="cmp-lbl"><span>Greedy</span><span id="cG">—</span></div>
+      <div class="cmp-bar"><div class="cmp-fill" id="cGb" style="width:0%;background:#ff6600"></div></div>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status">
+    <div class="sdot idle" id="sdot"></div>
+    <span id="sTxt">시뮬레이션 대기 중 — 충전 요청을 추가하고 실행 버튼을 누르세요</span>
+    <span class="hint">드래그 회전 · 스크롤 줌 · 마우스 이동: 팬</span>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════
+//  GRID CONFIG
+// ═══════════════════════════════════════════════════════════
+const GW = 8;          // rail cols (x)
+const GH = 5;          // rail rows (z)
+const SP = 3.2;        // spacing between nodes
+const RH = 3.4;        // rail height (y)
+const SPEED_BASE = 3;  // world units per second @ 1x
+
+// ═══════════════════════════════════════════════════════════
+//  RENDERER
+// ═══════════════════════════════════════════════════════════
+const cArea = document.getElementById('cArea');
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x050709, 1);
+cArea.insertBefore(renderer.domElement, cArea.firstChild);
+
+// Fit canvas
+function resize() {
+  const w = cArea.clientWidth, h = cArea.clientHeight;
+  renderer.setSize(w, h, false);
+  cam.aspect = w / h;
+  cam.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+// ═══════════════════════════════════════════════════════════
+//  SCENE & CAMERA
+// ═══════════════════════════════════════════════════════════
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x050709, 0.018);
+
+const CTR = new THREE.Vector3((GW-1)*SP/2, 0, (GH-1)*SP/2);
+const cam = new THREE.PerspectiveCamera(42, 1, 0.1, 250);
+
+let orbitTheta = -0.25;
+let orbitPhi   = 0.88;
+let orbitR     = 30;
+
+function applyCam() {
+  cam.position.set(
+    CTR.x + orbitR * Math.sin(orbitPhi) * Math.sin(orbitTheta),
+    CTR.y + orbitR * Math.cos(orbitPhi),
+    CTR.z + orbitR * Math.sin(orbitPhi) * Math.cos(orbitTheta)
+  );
+  cam.lookAt(CTR);
+}
+applyCam();
+resize();
+
+// ─── Mouse orbit ───
+let mDown = false, mX = 0, mY = 0;
+cArea.addEventListener('mousedown', e => { mDown=true; mX=e.clientX; mY=e.clientY; });
+window.addEventListener('mouseup',  () => mDown=false);
+window.addEventListener('mousemove', e => {
+  if (!mDown) return;
+  orbitTheta -= (e.clientX - mX) * 0.004;
+  orbitPhi = Math.max(0.18, Math.min(1.52, orbitPhi + (e.clientY - mY) * 0.004));
+  mX = e.clientX; mY = e.clientY;
+  applyCam();
+});
+cArea.addEventListener('wheel', e => {
+  orbitR = Math.max(8, Math.min(65, orbitR + e.deltaY * 0.03));
+  applyCam();
+});
+
+// ═══════════════════════════════════════════════════════════
+//  LIGHTING
+// ═══════════════════════════════════════════════════════════
+scene.add(new THREE.AmbientLight(0x102535, 1.8));
+const dirL = new THREE.DirectionalLight(0x8090a0, 0.7);
+dirL.position.set(12, 22, 10);
+dirL.castShadow = true;
+scene.add(dirL);
+
+const robotLight = new THREE.PointLight(0x00e5ff, 2.5, 9);
+scene.add(robotLight);
+
+// ═══════════════════════════════════════════════════════════
+//  GROUND
+// ═══════════════════════════════════════════════════════════
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry((GW+1)*SP, (GH+1)*SP),
+  new THREE.MeshLambertMaterial({ color: 0x080c12 })
+);
+ground.rotation.x = -Math.PI/2;
+ground.position.set(CTR.x, 0, CTR.z);
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ─── Ground grid lines ───
+function gridLines(color, yOff) {
+  const verts = [];
+  for (let c=0; c<GW; c++) {
+    for (let r=0; r<GH; r++) {
+      const x=c*SP, z=r*SP, hw=1.25, hd=0.75;
+      [[x-hw,z-hd,x+hw,z-hd],[x+hw,z-hd,x+hw,z+hd],[x+hw,z+hd,x-hw,z+hd],[x-hw,z+hd,x-hw,z-hd]]
+        .forEach(([x1,z1,x2,z2]) => verts.push(x1,yOff,z1,x2,yOff,z2));
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  scene.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color })));
+}
+gridLines(0x141e28, 0.01);
+
+// ─── Column supports ───
+const colMat = new THREE.MeshLambertMaterial({ color: 0x0d1520 });
+for (let c=0; c<GW; c++) for (let r=0; r<GH; r++) {
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, RH, 6), colMat);
+  col.position.set(c*SP, RH/2, r*SP);
+  scene.add(col);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RAIL SYSTEM
+// ═══════════════════════════════════════════════════════════
+const railMat = new THREE.LineBasicMaterial({ color: 0x00e5ff });
+const rv = [];
+for (let r=0; r<GH; r++) { rv.push(0,RH,r*SP, (GW-1)*SP,RH,r*SP); }
+for (let c=0; c<GW; c++) { rv.push(c*SP,RH,0, c*SP,RH,(GH-1)*SP); }
+const rg = new THREE.BufferGeometry();
+rg.setAttribute('position', new THREE.Float32BufferAttribute(rv, 3));
+scene.add(new THREE.LineSegments(rg, railMat));
+
+// ─── Node spheres (A* visualization) ───
+const nGeo = new THREE.SphereGeometry(0.11, 7, 7);
+const nodes = []; // [r][c]
+const MAT_NODE_DEF    = () => new THREE.MeshLambertMaterial({ color:0x0b1820, transparent:true, opacity:0.6 });
+const MAT_NODE_OPEN   = () => new THREE.MeshLambertMaterial({ color:0xffaa00, emissive:0xff8800, emissiveIntensity:0.7 });
+const MAT_NODE_CLOSED = () => new THREE.MeshLambertMaterial({ color:0xff5500, transparent:true, opacity:0.45 });
+const MAT_NODE_PATH   = () => new THREE.MeshLambertMaterial({ color:0x00ff88, emissive:0x00ff88, emissiveIntensity:0.5 });
+
+for (let r=0; r<GH; r++) {
+  nodes[r] = [];
+  for (let c=0; c<GW; c++) {
+    const m = new THREE.Mesh(nGeo, MAT_NODE_DEF());
+    m.position.set(c*SP, RH, r*SP);
+    scene.add(m);
+    nodes[r][c] = m;
+  }
+}
+
+function resetNodes() {
+  for (let r=0; r<GH; r++)
+    for (let c=0; c<GW; c++) {
+      nodes[r][c].material.dispose();
+      nodes[r][c].material = MAT_NODE_DEF();
+    }
+}
+
+function paintNodes(explored, pathNodes) {
+  resetNodes();
+  explored.forEach(({c,r}) => {
+    nodes[r][c].material.dispose();
+    nodes[r][c].material = MAT_NODE_CLOSED();
+  });
+  pathNodes.forEach(({c,r}) => {
+    nodes[r][c].material.dispose();
+    nodes[r][c].material = MAT_NODE_PATH();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CARS
+// ═══════════════════════════════════════════════════════════
+const CAR_COL = { idle:0x1c2d3e, requesting:0xcc2211, charging:0x2255dd, done:0x116633 };
+const CAR_EMI = { idle:0x000000, requesting:0x991100, charging:0x1133aa, done:0x003322 };
+
+const carGeo = new THREE.BoxGeometry(2.3, 0.58, 1.05);
+const carData = [];
+
+const POSITIONS = [
+  [0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[7,0],
+  [0,1],[2,1],[3,1],[5,1],[7,1],
+  [0,2],[1,2],[3,2],[4,2],[6,2],[7,2],
+  [1,3],[2,3],[4,3],[6,3],
+  [0,4],[2,4],[3,4],[5,4],[7,4],
+];
+
+POSITIONS.forEach(([c,r]) => {
+  const mat = new THREE.MeshLambertMaterial({ color:CAR_COL.idle, emissive:CAR_EMI.idle, emissiveIntensity:0.6 });
+  const mesh = new THREE.Mesh(carGeo, mat);
+  mesh.position.set(c*SP, 0.29, r*SP);
+  mesh.castShadow = true;
+  scene.add(mesh);
+  carData.push({ c, r, mesh, state:'idle' });
+});
+
+function setCarState(car, state) {
+  car.state = state;
+  car.mesh.material.color.set(CAR_COL[state]);
+  car.mesh.material.emissive.set(CAR_EMI[state]);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ROBOT
+// ═══════════════════════════════════════════════════════════
+const robotMat = new THREE.MeshLambertMaterial({ color:0x00e5ff, emissive:0x00ccee, emissiveIntensity:1 });
+const robotMesh = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.48, 0.48), robotMat);
+robotMesh.castShadow = true;
+scene.add(robotMesh);
+
+// Small indicator ring
+const ringMesh = new THREE.Mesh(
+  new THREE.TorusGeometry(0.55, 0.04, 6, 24),
+  new THREE.MeshLambertMaterial({ color:0x00e5ff, emissive:0x00e5ff, emissiveIntensity:0.8 })
+);
+ringMesh.rotation.x = Math.PI/2;
+scene.add(ringMesh);
+
+function setRobotPos(wx, wz) {
+  robotMesh.position.set(wx, RH, wz);
+  ringMesh.position.set(wx, RH, wz);
+  robotLight.position.set(wx, RH+0.5, wz);
+}
+setRobotPos(0, 0);
+
+// ═══════════════════════════════════════════════════════════
+//  CABLE (charging hose)
+// ═══════════════════════════════════════════════════════════
+let cable = null;
+function showCable(wx, wz) {
+  hideCable();
+  const pts = [new THREE.Vector3(wx, RH-0.3, wz), new THREE.Vector3(wx, 0.6, wz)];
+  cable = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color:0x4499ff })
+  );
+  scene.add(cable);
+}
+function hideCable() { if (cable) { scene.remove(cable); cable=null; } }
+
+// ═══════════════════════════════════════════════════════════
+//  PATH VISUALIZATION
+// ═══════════════════════════════════════════════════════════
+let pathLine = null;
+function drawPath(pathNodes) {
+  if (pathLine) { scene.remove(pathLine); pathLine=null; }
+  if (!pathNodes || pathNodes.length < 2) return;
+  const pts = pathNodes.map(n => new THREE.Vector3(n.c*SP, RH+0.08, n.r*SP));
+  pathLine = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color:0x00ff88, linewidth:2 })
+  );
+  scene.add(pathLine);
+}
+function clearPath() { if (pathLine) { scene.remove(pathLine); pathLine=null; } }
+
+// ═══════════════════════════════════════════════════════════
+//  PATHFINDING
+// ═══════════════════════════════════════════════════════════
+let algo = 'astar';
+
+function key(c,r) { return c*100+r; }
+function ukey(k) { return { c:Math.floor(k/100), r:k%100 }; }
+function nbrs(c,r) {
+  const n=[];
+  if (c>0)    n.push({c:c-1,r});
+  if (c<GW-1) n.push({c:c+1,r});
+  if (r>0)    n.push({c,r:r-1});
+  if (r<GH-1) n.push({c,r:r+1});
+  return n;
+}
+function mdist(c1,r1,c2,r2) { return Math.abs(c1-c2)+Math.abs(r1-r2); }
+
+function findPath(sc, sr, gc, gr) {
+  const t0 = performance.now();
+  if (sc===gc && sr===gr) return { path:[{c:sc,r:sr}], explored:[], time:0, pathLen:0, nodesVisited:0 };
+
+  const open = new Map();   // key -> {c,r,g,f}
+  const closed = new Set();
+  const from = {};
+  const explored = [];
+
+  const sk = key(sc,sr), gk = key(gc,gr);
+  const h = (c,r) => mdist(c,r,gc,gr);
+  open.set(sk, { c:sc, r:sr, g:0, f: algo==='greedy' ? h(sc,sr) : h(sc,sr) });
+
+  while (open.size > 0) {
+    let bk = null, bf = Infinity;
+    for (const [k, nd] of open) {
+      const f = algo==='dijkstra' ? nd.g : nd.f;
+      if (f < bf) { bf=f; bk=k; }
+    }
+    const cur = open.get(bk);
+    open.delete(bk);
+    if (bk === gk) {
+      const path=[], t1=performance.now();
+      let k=gk;
+      while (k !== undefined) { path.unshift(ukey(k)); k=from[k]; }
+      return { path, explored, time:+(t1-t0).toFixed(2), pathLen:(path.length-1)*SP, nodesVisited:explored.length };
+    }
+    closed.add(bk);
+    explored.push({c:cur.c,r:cur.r});
+    for (const nb of nbrs(cur.c,cur.r)) {
+      const nk = key(nb.c,nb.r);
+      if (closed.has(nk)) continue;
+      const ng = cur.g+1;
+      const ex = open.get(nk);
+      if (!ex || ng < ex.g) {
+        from[nk] = bk;
+        const nf = algo==='greedy' ? h(nb.c,nb.r) : ng+h(nb.c,nb.r);
+        open.set(nk, {c:nb.c, r:nb.r, g:ng, f: algo==='dijkstra' ? ng : nf});
+      }
+    }
+  }
+  return null;
+}
+
+// Nearest-neighbor greedy ordering for multi-target
+function orderTargets(sc, sr, targets) {
+  const rem = [...targets];
+  const ord = [];
+  let cc=sc, cr=sr;
+  while (rem.length) {
+    let bi=0, bd=Infinity;
+    rem.forEach((t,i) => { const d=mdist(cc,cr,t.c,t.r); if(d<bd){bd=d;bi=i;} });
+    ord.push(rem[bi]);
+    cc=rem[bi].c; cr=rem[bi].r;
+    rem.splice(bi,1);
+  }
+  return ord;
+}
+
+// Compare all 3 algos (for HUD comparison bar)
+const algoHistory = { astar:[], dijkstra:[], greedy:[] };
+function runCompare(sc, sr, gc, gr) {
+  const prev = algo;
+  ['astar','dijkstra','greedy'].forEach(a => {
+    algo=a;
+    const res = findPath(sc,sr,gc,gr);
+    if (res) algoHistory[a].push(res.nodesVisited);
+  });
+  algo=prev;
+  updateCompareBars();
+}
+function updateCompareBars() {
+  const avg = a => algoHistory[a].length ? algoHistory[a].reduce((s,v)=>s+v,0)/algoHistory[a].length : 0;
+  const vals = { astar:avg('astar'), dijkstra:avg('dijkstra'), greedy:avg('greedy') };
+  const maxV = Math.max(1, ...Object.values(vals));
+  document.getElementById('cA').textContent = vals.astar.toFixed(0)+'n';
+  document.getElementById('cD').textContent = vals.dijkstra.toFixed(0)+'n';
+  document.getElementById('cG').textContent = vals.greedy.toFixed(0)+'n';
+  document.getElementById('cAb').style.width = (vals.astar/maxV*100)+'%';
+  document.getElementById('cDb').style.width = (vals.dijkstra/maxV*100)+'%';
+  document.getElementById('cGb').style.width = (vals.greedy/maxV*100)+'%';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SIMULATION STATE
+// ═══════════════════════════════════════════════════════════
+let running = false;
+let simSpeed = 2;
+const CHARGE_DUR = 1.8; // seconds
+
+const rob = { c:0, r:0, wx:0, wz:0, state:'idle' };
+let queue = [];          // cars in charge queue (state='requesting'|'charging')
+let curPath = [];        // current A* path
+let segIdx = 0;
+let segProg = 0;
+let chargingCar = null;
+let chargeT = 0;
+let totalDone = 0;
+let totalPath = 0;
+let totalNodes = 0;
+let totalTime = 0;
+let totalSeg = 0;
+let lastT = null;
+
+// ═══════════════════════════════════════════════════════════
+//  SIMULATION UPDATE
+// ═══════════════════════════════════════════════════════════
+function simUpdate(dt) {
+  const ds = dt * simSpeed;
+
+  if (rob.state === 'idle') {
+    const pending = queue.filter(c => c.state==='requesting');
+    if (!pending.length) return;
+
+    const ordered = orderTargets(rob.c, rob.r, pending);
+    const tgt = ordered[0];
+
+    runCompare(rob.c, rob.r, tgt.c, tgt.r);
+    const res = findPath(rob.c, rob.r, tgt.c, tgt.r);
+    if (!res) return;
+
+    if (res.path.length < 2) {
+      startCharging(tgt);
+      return;
+    }
+
+    curPath = res.path;
+    segIdx = 0; segProg = 0;
+    totalPath += res.pathLen;
+    totalNodes += res.nodesVisited;
+    totalTime  += res.time;
+    totalSeg++;
+
+    paintNodes(res.explored, res.path);
+    drawPath(res.path);
+
+    rob.state = 'moving';
+    updateStats();
+    setStatus('moving', `경로 계획 완료 · 로봇 이동 중 → (${tgt.c},${tgt.r}) · 탐색 노드: ${res.nodesVisited} · ${res.time}ms`);
+    updateHUD();
+    return;
+  }
+
+  if (rob.state === 'moving') {
+    if (segIdx >= curPath.length-1) {
+      const end = curPath[curPath.length-1];
+      rob.c=end.c; rob.r=end.r; rob.wx=end.c*SP; rob.wz=end.r*SP;
+      const car = queue.find(c => c.c===rob.c && c.r===rob.r && c.state==='requesting');
+      if (car) startCharging(car);
+      else rob.state='idle';
+      return;
+    }
+
+    const from = curPath[segIdx];
+    const to   = curPath[segIdx+1];
+    segProg += (SPEED_BASE * ds) / SP;
+
+    if (segProg >= 1) {
+      segProg = 0; segIdx++;
+      rob.c=to.c; rob.r=to.r; rob.wx=to.c*SP; rob.wz=to.r*SP;
+    } else {
+      rob.wx = from.c*SP + (to.c-from.c)*SP*segProg;
+      rob.wz = from.r*SP + (to.r-from.r)*SP*segProg;
+    }
+    setRobotPos(rob.wx, rob.wz);
+    updateHUD();
+    return;
+  }
+
+  if (rob.state === 'charging') {
+    chargeT += ds;
+    // pulse cable color
+    if (cable) {
+      const t = Date.now()/400;
+      cable.material.color.setHSL(0.6, 1, 0.5 + 0.2*Math.sin(t));
+    }
+    if (chargeT >= CHARGE_DUR) {
+      setCarState(chargingCar, 'done');
+      queue = queue.filter(q => q !== chargingCar);
+      totalDone++;
+      chargingCar = null; chargeT = 0;
+      hideCable();
+      rob.state = 'idle';
+      updateStats();
+      setStatus('active', `충전 완료 ✓ · 총 ${totalDone}건 완료 · 대기 중: ${queue.filter(c=>c.state==='requesting').length}건`);
+      if (!queue.filter(c=>c.state==='requesting').length) { clearPath(); resetNodes(); }
+    }
+    return;
+  }
+}
+
+function startCharging(car) {
+  setCarState(car, 'charging');
+  chargingCar = car; chargeT = 0;
+  rob.state = 'charging';
+  showCable(rob.wx, rob.wz);
+  setStatus('charging', `충전 중 · 차량 (${car.c},${car.r}) · 예상 시간: ${CHARGE_DUR/simSpeed.toFixed(1)}s`);
+  updateHUD();
+  updateQueueDisplay();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════════════════
+function setAlgo(a, el) {
+  algo = a;
+  document.querySelectorAll('.algo-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function toggleRun() {
+  running = !running;
+  const btn = document.getElementById('runBtn');
+  if (running) {
+    btn.textContent = '⏸ 일시정지';
+    btn.className = 'btn btn-run';
+    setStatus('active', '시뮬레이션 실행 중...');
+  } else {
+    btn.textContent = '▶ 실행';
+    btn.className = 'btn btn-run paused';
+    setStatus('idle', '일시정지됨');
+  }
+}
+
+function resetSim() {
+  running = false;
+  const btn = document.getElementById('runBtn');
+  btn.textContent = '▶ 실행'; btn.className = 'btn btn-run paused';
+
+  rob.c=0; rob.r=0; rob.wx=0; rob.wz=0; rob.state='idle';
+  setRobotPos(0, 0);
+
+  carData.forEach(car => setCarState(car, 'idle'));
+  queue=[]; chargingCar=null; chargeT=0;
+  curPath=[]; segIdx=0; segProg=0;
+
+  clearPath(); resetNodes(); hideCable();
+  totalDone=0; totalPath=0; totalNodes=0; totalTime=0; totalSeg=0;
+  algoHistory.astar=[]; algoHistory.dijkstra=[]; algoHistory.greedy=[];
+
+  updateStats(); updateHUD(); updateQueueDisplay();
+  updateCompareBars();
+  setStatus('idle', '리셋 완료');
+}
+
+function addRequest() {
+  const idle = carData.filter(c => c.state==='idle');
+  if (!idle.length) { setStatus('idle', '요청 가능한 차량 없음 (모두 충전 중 또는 완료)'); return; }
+  const car = idle[Math.floor(Math.random()*idle.length)];
+  setCarState(car, 'requesting');
+  queue.push(car);
+  updateHUD(); updateQueueDisplay();
+  setStatus('idle', `⚡ 충전 요청 추가 → (${car.c},${car.r}) · 대기열: ${queue.filter(c=>c.state==='requesting').length}건`);
+}
+
+function addMulti() { for (let i=0;i<3;i++) addRequest(); }
+
+function setSpeed(v) {
+  simSpeed = parseFloat(v);
+  document.getElementById('spLbl').textContent = simSpeed+'×';
+}
+
+function updateStats() {
+  document.getElementById('sPath').textContent  = totalPath.toFixed(1);
+  document.getElementById('sNodes').textContent = totalNodes;
+  document.getElementById('sTime').textContent  = totalTime.toFixed(1);
+  document.getElementById('sDone').textContent  = totalDone;
+  if (totalSeg > 0) {
+    const avgN = totalNodes/totalSeg;
+    const maxN = GW*GH;
+    const eff = Math.max(0, 100 - (avgN/maxN)*70);
+    document.getElementById('effVal').textContent = eff.toFixed(1)+'%';
+    document.getElementById('effBar').style.width = eff+'%';
+  }
+}
+
+function updateHUD() {
+  document.getElementById('hPos').textContent   = `(${rob.c}, ${rob.r})`;
+  document.getElementById('hQ').textContent     = queue.filter(c=>c.state==='requesting').length;
+  document.getElementById('hState').textContent = {idle:'대기중',moving:'이동중',charging:'충전중'}[rob.state] || '—';
+  document.getElementById('hSeg').textContent   = `${segIdx}/${Math.max(0,curPath.length-1)}`;
+  if (chargingCar)            document.getElementById('hTgt').textContent = `(${chargingCar.c}, ${chargingCar.r})`;
+  else if (curPath.length>0)  document.getElementById('hTgt').textContent = `(${curPath[curPath.length-1].c}, ${curPath[curPath.length-1].r})`;
+  else                        document.getElementById('hTgt').textContent = '—';
+}
+
+function updateQueueDisplay() {
+  const el = document.getElementById('qWrap');
+  const pending  = queue.filter(c=>c.state==='requesting');
+  const charging = queue.filter(c=>c.state==='charging');
+  el.innerHTML = (charging.length?'<span style="font-size:9px;color:var(--text3)">충전:</span>':'') +
+    charging.map(()=>'<div class="q-dot charging"></div>').join('') +
+    (pending.length?'<span style="font-size:9px;color:var(--text3);margin-left:4px">대기:</span>':'') +
+    pending.map(()=>'<div class="q-dot"></div>').join('');
+}
+
+function setStatus(type, text) {
+  document.getElementById('sdot').className = `sdot ${type}`;
+  document.getElementById('sTxt').textContent = text;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER LOOP
+// ═══════════════════════════════════════════════════════════
+let pulseT = 0;
+
+function animate(ts) {
+  requestAnimationFrame(animate);
+  const now = ts/1000;
+  const dt  = lastT !== null ? Math.min(now - lastT, 0.1) : 0;
+  lastT = now;
+
+  // Robot pulse
+  pulseT += dt * 2.2;
+  robotMat.emissiveIntensity = 0.7 + Math.sin(pulseT) * 0.45;
+  robotLight.intensity = 1.8 + Math.sin(pulseT) * 1.0;
+  ringMesh.material.emissiveIntensity = 0.5 + Math.sin(pulseT*1.3) * 0.3;
+
+  // Sim step
+  if (running) simUpdate(dt);
+
+  renderer.render(scene, cam);
+}
+animate(0);
+
+// ─── INIT: add 3 default requests ───
+setTimeout(() => {
+  addRequest(); addRequest(); addRequest();
+}, 400);
+</script>
+</body>
+</html>

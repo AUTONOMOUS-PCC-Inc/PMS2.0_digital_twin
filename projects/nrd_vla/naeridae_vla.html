@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>내리다 VLA — 충전 포트 인식 엔진</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:    #050709;
+  --bg2:   #0a0f16;
+  --bg3:   #0f1620;
+  --bg4:   #18202e;
+  --b1:    rgba(0,220,255,0.07);
+  --b2:    rgba(0,220,255,0.18);
+  --cyan:  #00dcff;
+  --green: #00ff88;
+  --amber: #ffaa00;
+  --red:   #ff3322;
+  --purple:#a855f7;
+  --tx:    #b0c4d4;
+  --tx2:   #445566;
+  --tx3:   #1e303f;
+  --mono:  'IBM Plex Mono', monospace;
+  --syne:  'Syne', sans-serif;
+}
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; background:var(--bg); color:var(--tx); font-family:var(--mono); font-size:12px; }
+
+/* ─── TOP BAR ─── */
+.topbar {
+  height:52px; display:flex; align-items:center; gap:12px;
+  padding:0 18px; border-bottom:1px solid var(--b1);
+  background:var(--bg2); flex-shrink:0;
+}
+.logo { font-family:var(--syne); font-weight:800; font-size:17px; color:var(--cyan); letter-spacing:-.3px; }
+.logo-sep { width:1px; height:22px; background:var(--b2); }
+.logo-sub { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--tx2); }
+
+.car-sel {
+  margin-left:auto; display:flex; align-items:center; gap:6px;
+}
+.car-sel label { font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--tx2); }
+select#carSelect {
+  background:var(--bg3); border:1px solid var(--b2); border-radius:5px;
+  color:var(--tx); font-family:var(--mono); font-size:11px;
+  padding:5px 10px; cursor:pointer; outline:none;
+}
+select#carSelect:focus { border-color:var(--cyan); }
+
+.scan-btn {
+  padding:7px 18px; border-radius:6px; border:none; cursor:pointer;
+  font-family:var(--mono); font-size:11px; font-weight:500;
+  background:var(--cyan); color:#050709; transition:all .15s;
+  display:flex; align-items:center; gap:6px;
+}
+.scan-btn:hover { background:#00f0ff; }
+.scan-btn:disabled { background:var(--bg4); color:var(--tx2); cursor:not-allowed; border:1px solid var(--b1); }
+.scan-btn .icon { font-size:13px; }
+
+.stat-chips { display:flex; gap:6px; }
+.chip {
+  font-size:9px; padding:3px 9px; border-radius:4px;
+  border:1px solid var(--b1); color:var(--tx2); letter-spacing:1px;
+  text-transform:uppercase;
+}
+.chip.ok { border-color:rgba(0,255,136,.3); color:var(--green); }
+.chip.warn { border-color:rgba(255,170,0,.3); color:var(--amber); }
+.chip.err  { border-color:rgba(255,51,34,.3); color:var(--red); }
+
+/* ─── MAIN GRID ─── */
+.grid {
+  display:grid;
+  grid-template-columns: 480px 1fr;
+  grid-template-rows: 1fr 1fr;
+  height:calc(100vh - 52px);
+  overflow:hidden;
+}
+
+/* ─── CAMERA PANEL ─── */
+.cam-panel {
+  border-right:1px solid var(--b1);
+  border-bottom:1px solid var(--b1);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.panel-head {
+  padding:9px 14px; border-bottom:1px solid var(--b1);
+  display:flex; align-items:center; gap:7px; flex-shrink:0;
+  background:rgba(0,220,255,.02);
+}
+.ph-dot { width:6px; height:6px; border-radius:50%; }
+.ph-title { font-size:10px; font-weight:500; color:var(--tx); letter-spacing:.5px; }
+.ph-badge {
+  margin-left:auto; font-size:8px; padding:2px 7px; border-radius:3px;
+  border:1px solid var(--b1); color:var(--tx2); letter-spacing:1px; text-transform:uppercase;
+}
+.ph-badge.live { border-color:rgba(0,255,136,.4); color:var(--green); animation:blink 1.2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.cam-canvas-wrap {
+  flex:1; position:relative; display:flex; align-items:center; justify-content:center;
+  background:#030507; overflow:hidden;
+}
+#camCanvas { display:block; }
+
+/* Camera overlays */
+.cam-overlay {
+  position:absolute; inset:0; pointer-events:none;
+}
+.scan-line {
+  position:absolute; left:0; right:0; height:2px;
+  background:linear-gradient(90deg, transparent, rgba(0,220,255,.6), transparent);
+  animation:scanline 2s linear infinite;
+  display:none;
+}
+.scan-line.active { display:block; }
+@keyframes scanline { 0%{top:0%} 100%{top:100%} }
+
+.corner { position:absolute; width:18px; height:18px; }
+.corner.tl { top:10px; left:10px; border-top:2px solid var(--cyan); border-left:2px solid var(--cyan); }
+.corner.tr { top:10px; right:10px; border-top:2px solid var(--cyan); border-right:2px solid var(--cyan); }
+.corner.bl { bottom:10px; left:10px; border-bottom:2px solid var(--cyan); border-left:2px solid var(--cyan); }
+.corner.br { bottom:10px; right:10px; border-bottom:2px solid var(--cyan); border-right:2px solid var(--cyan); }
+
+.port-box {
+  position:absolute; border:1.5px solid var(--green);
+  border-radius:3px; display:none;
+  box-shadow:0 0 12px rgba(0,255,136,.3);
+}
+.port-box::before {
+  content:attr(data-label);
+  position:absolute; top:-18px; left:0;
+  font-size:8px; color:var(--green); letter-spacing:1px;
+  white-space:nowrap; background:rgba(0,255,136,.1); padding:1px 5px; border-radius:2px;
+}
+.port-box.show { display:block; }
+.port-crosshair {
+  position:absolute; width:14px; height:14px; display:none;
+  transform:translate(-50%,-50%);
+}
+.port-crosshair::before, .port-crosshair::after {
+  content:''; position:absolute; background:var(--green);
+}
+.port-crosshair::before { width:1px; height:100%; left:50%; }
+.port-crosshair::after  { height:1px; width:100%; top:50%; }
+.port-crosshair.show { display:block; }
+
+.cam-info {
+  padding:6px 12px; border-top:1px solid var(--b1);
+  display:flex; gap:14px; align-items:center; flex-shrink:0;
+  background:var(--bg2); font-size:9px; color:var(--tx2);
+}
+.ci-val { color:var(--cyan); font-size:10px; }
+
+/* ─── VLA PANEL ─── */
+.vla-panel {
+  border-bottom:1px solid var(--b1);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.vla-body { flex:1; overflow-y:auto; padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
+.vla-body::-webkit-scrollbar { width:3px; }
+.vla-body::-webkit-scrollbar-thumb { background:var(--b2); border-radius:2px; }
+
+/* Reasoning stream */
+.stream-card {
+  background:var(--bg3); border:1px solid var(--b1); border-radius:8px; padding:12px;
+}
+.sc-head { display:flex; align-items:center; gap:7px; margin-bottom:8px; }
+.sc-icon { font-size:14px; }
+.sc-title { font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--tx2); }
+.sc-status { margin-left:auto; font-size:9px; color:var(--tx2); }
+.sc-status.thinking { color:var(--amber); animation:blink 1s infinite; }
+.sc-status.done { color:var(--green); }
+
+#streamText {
+  font-size:11px; color:var(--tx); line-height:1.7; min-height:40px;
+  border-left:2px solid var(--b2); padding-left:10px;
+}
+#streamText .cursor { display:inline-block; width:2px; height:12px; background:var(--cyan); animation:blink .7s infinite; vertical-align:middle; margin-left:2px; }
+
+/* Detection cards */
+.det-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.det-card {
+  background:var(--bg3); border:1px solid var(--b1); border-radius:6px;
+  padding:9px 11px;
+}
+.det-label { font-size:8px; letter-spacing:1.5px; text-transform:uppercase; color:var(--tx3); margin-bottom:4px; }
+.det-val { font-size:13px; font-weight:500; color:var(--cyan); font-family:var(--syne); }
+.det-sub { font-size:9px; color:var(--tx2); margin-top:2px; }
+
+/* Confidence bar */
+.conf-bar { height:3px; background:var(--bg4); border-radius:2px; margin-top:5px; overflow:hidden; }
+.conf-fill { height:100%; background:var(--green); border-radius:2px; transition:width .6s; }
+
+/* Spatial data */
+.spatial-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; }
+.sp-card {
+  background:var(--bg4); border:1px solid var(--b1); border-radius:5px;
+  padding:7px 8px; text-align:center;
+}
+.sp-axis { font-size:8px; color:var(--tx3); margin-bottom:2px; }
+.sp-val  { font-size:12px; color:var(--amber); font-weight:500; }
+.sp-unit { font-size:8px; color:var(--tx3); }
+
+/* ─── ARM PANEL ─── */
+.arm-panel {
+  border-right:1px solid var(--b1);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.arm-canvas-wrap { flex:1; position:relative; }
+#armCanvas { display:block; }
+
+/* ─── ACTION PANEL ─── */
+.action-panel { display:flex; flex-direction:column; overflow:hidden; }
+.action-body { flex:1; overflow-y:auto; padding:10px 12px; display:flex; flex-direction:column; gap:6px; }
+.action-body::-webkit-scrollbar { width:3px; }
+.action-body::-webkit-scrollbar-thumb { background:var(--b2); border-radius:2px; }
+
+.action-step {
+  display:grid; grid-template-columns:22px 1fr auto;
+  gap:8px; align-items:center;
+  background:var(--bg3); border:1px solid var(--b1); border-radius:6px;
+  padding:9px 11px; transition:all .2s;
+}
+.action-step.active { border-color:var(--cyan); background:rgba(0,220,255,.05); }
+.action-step.done   { border-color:rgba(0,255,136,.3); background:rgba(0,255,136,.03); }
+.action-step.pending { opacity:.45; }
+
+.step-num {
+  width:22px; height:22px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:9px; font-weight:700; border:1px solid var(--b2); color:var(--tx2);
+  flex-shrink:0;
+}
+.action-step.active .step-num { border-color:var(--cyan); color:var(--cyan); background:rgba(0,220,255,.1); }
+.action-step.done   .step-num { border-color:var(--green); color:var(--green); background:rgba(0,255,136,.08); }
+
+.step-desc { font-size:11px; color:var(--tx); }
+.step-type { font-size:9px; color:var(--tx2); margin-top:2px; }
+
+.step-dur  { font-size:10px; color:var(--tx2); white-space:nowrap; }
+.step-prog {
+  grid-column:1/-1; height:2px; background:var(--bg4); border-radius:1px; overflow:hidden;
+  display:none;
+}
+.step-prog.show { display:block; }
+.step-prog-fill { height:100%; background:var(--cyan); width:0%; transition:width linear; }
+
+/* Stats row at bottom of action panel */
+.action-stats {
+  padding:8px 12px; border-top:1px solid var(--b1);
+  display:flex; gap:14px; align-items:center; flex-shrink:0;
+  background:var(--bg2); font-size:9px; color:var(--tx2);
+}
+.as-val { color:var(--green); font-size:11px; }
+
+/* Empty state */
+.empty-state {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  height:100%; gap:8px; color:var(--tx3); padding:20px; text-align:center;
+}
+.empty-icon { font-size:32px; opacity:.4; }
+.empty-text { font-size:10px; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<!-- ─── TOP BAR ─────────────────────────── -->
+<div class="topbar">
+  <div class="logo">내리다 VLA</div>
+  <div class="logo-sep"></div>
+  <div class="logo-sub">Vision · Language · Action Engine</div>
+
+  <div class="stat-chips">
+    <div class="chip" id="chipModel">claude-sonnet</div>
+    <div class="chip ok" id="chipStatus">준비</div>
+    <div class="chip" id="chipAcc">정확도 —</div>
+  </div>
+
+  <div class="car-sel">
+    <label>차량 선택</label>
+    <select id="carSelect" onchange="selectCar(this.value)">
+      <option value="ioniq5">현대 아이오닉 5 (CCS2)</option>
+      <option value="ev6">기아 EV6 (CCS2)</option>
+      <option value="modelY">테슬라 모델 Y (Tesla)</option>
+      <option value="bmwix">BMW iX (CCS2)</option>
+      <option value="etron">아우디 e-tron (CCS2)</option>
+      <option value="niro">기아 니로 EV (CCS2)</option>
+    </select>
+  </div>
+
+  <button class="scan-btn" id="scanBtn" onclick="runScan()">
+    <span class="icon">⚡</span> VLA 스캔 실행
+  </button>
+</div>
+
+<!-- ─── MAIN GRID ──────────────────────── -->
+<div class="grid">
+
+  <!-- CAMERA FEED -->
+  <div class="cam-panel">
+    <div class="panel-head">
+      <div class="ph-dot" style="background:#00ff88"></div>
+      <div class="ph-title">CAMERA FEED — Vision Module</div>
+      <div class="ph-badge" id="camBadge">STANDBY</div>
+    </div>
+    <div class="cam-canvas-wrap">
+      <canvas id="camCanvas" width="480" height="300"></canvas>
+      <div class="cam-overlay">
+        <div class="scan-line" id="scanLine"></div>
+        <div class="corner tl"></div><div class="corner tr"></div>
+        <div class="corner bl"></div><div class="corner br"></div>
+        <div class="port-box" id="portBox" data-label="PORT DETECTED"></div>
+        <div class="port-crosshair" id="portCross"></div>
+      </div>
+    </div>
+    <div class="cam-info">
+      <span>해상도 <span class="ci-val">480×300</span></span>
+      <span>센서 <span class="ci-val">RGB-D</span></span>
+      <span>FPS <span class="ci-val">30</span></span>
+      <span style="margin-left:auto">포트 좌표 <span class="ci-val" id="portCoords">— , —</span></span>
+      <span>신뢰도 <span class="ci-val" id="portConf">—%</span></span>
+    </div>
+  </div>
+
+  <!-- VLA INFERENCE -->
+  <div class="vla-panel">
+    <div class="panel-head">
+      <div class="ph-dot" style="background:var(--purple)"></div>
+      <div class="ph-title">VLA INFERENCE — Claude Model</div>
+      <div class="ph-badge" id="vlaBadge">IDLE</div>
+    </div>
+    <div class="vla-body" id="vlaBody">
+      <!-- Reasoning stream -->
+      <div class="stream-card">
+        <div class="sc-head">
+          <span class="sc-icon">🧠</span>
+          <span class="sc-title">모델 추론 (Reasoning)</span>
+          <span class="sc-status" id="scStatus">대기중</span>
+        </div>
+        <div id="streamText"><span style="color:var(--tx3)">스캔을 실행하면 VLA 모델이 카메라 이미지를 분석합니다...</span></div>
+      </div>
+
+      <!-- Detection results -->
+      <div id="detSection" style="display:none">
+        <div class="det-grid" id="detGrid"></div>
+        <div style="margin-top:8px">
+          <div class="det-label" style="margin-bottom:6px">공간 추정 (Spatial Estimation)</div>
+          <div class="spatial-grid" id="spatialGrid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3D ARM -->
+  <div class="arm-panel">
+    <div class="panel-head">
+      <div class="ph-dot" style="background:var(--amber)"></div>
+      <div class="ph-title">6-AXIS ARM — Simulation</div>
+      <div class="ph-badge" id="armBadge">HOME</div>
+    </div>
+    <div class="arm-canvas-wrap">
+      <canvas id="armCanvas"></canvas>
+    </div>
+  </div>
+
+  <!-- ACTION SEQUENCE -->
+  <div class="action-panel">
+    <div class="panel-head">
+      <div class="ph-dot" style="background:var(--green)"></div>
+      <div class="ph-title">ACTION SEQUENCE — Robot Plan</div>
+      <div class="ph-badge" id="actBadge">WAITING</div>
+    </div>
+    <div class="action-body" id="actionBody">
+      <div class="empty-state">
+        <div class="empty-icon">🤖</div>
+        <div class="empty-text">VLA 스캔을 실행하면 로봇팔 액션 플랜이<br>자동으로 생성됩니다</div>
+      </div>
+    </div>
+    <div class="action-stats">
+      <span>완료 스캔 <span class="as-val" id="statScans">0</span></span>
+      <span>평균 신뢰도 <span class="as-val" id="statConf">—</span></span>
+      <span>총 포트 유형 <span class="as-val" id="statTypes">—</span></span>
+      <span style="margin-left:auto">성공률 <span class="as-val" id="statSuccess">—</span></span>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════
+//  CAR MODEL DATA
+// ═══════════════════════════════════════════════════════════
+const CAR_MODELS = {
+  ioniq5: {
+    name:'현대 아이오닉 5', portType:'CCS2',
+    bodyColor:'#3e4e60', accentColor:'#2d3c4a',
+    portNormX:0.72, portNormY:0.48,
+    portW:80, portH:95,
+    design:'angular',
+  },
+  ev6: {
+    name:'기아 EV6', portType:'CCS2',
+    bodyColor:'#2e3d52', accentColor:'#233040',
+    portNormX:0.70, portNormY:0.46,
+    portW:78, portH:90,
+    design:'sweep',
+  },
+  modelY: {
+    name:'테슬라 모델 Y', portType:'Tesla',
+    bodyColor:'#c8cdd8', accentColor:'#aab0bc',
+    portNormX:0.18, portNormY:0.50,
+    portW:50, portH:55,
+    design:'tesla',
+  },
+  bmwix: {
+    name:'BMW iX', portType:'CCS2',
+    bodyColor:'#1a1e28', accentColor:'#131720',
+    portNormX:0.25, portNormY:0.42,
+    portW:76, portH:88,
+    design:'kidney',
+  },
+  etron: {
+    name:'아우디 e-tron', portType:'CCS2',
+    bodyColor:'#5a6070', accentColor:'#444a58',
+    portNormX:0.74, portNormY:0.50,
+    portW:74, portH:86,
+    design:'angular',
+  },
+  niro: {
+    name:'기아 니로 EV', portType:'CCS2',
+    bodyColor:'#2a4a7f', accentColor:'#1e3660',
+    portNormX:0.50, portNormY:0.32,
+    portW:82, portH:58,
+    design:'front',
+  },
+};
+
+let currentCar = 'ioniq5';
+let scanCount = 0;
+let totalConf = 0;
+let seenTypes = new Set();
+let successCount = 0;
+
+// ═══════════════════════════════════════════════════════════
+//  CANVAS CAMERA DRAWING
+// ═══════════════════════════════════════════════════════════
+const camCanvas = document.getElementById('camCanvas');
+const ctx = camCanvas.getContext('2d');
+
+function drawScene(carId, scanState='idle') {
+  const car = CAR_MODELS[carId];
+  const W = camCanvas.width, H = camCanvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Background: parking garage ──
+  const bgG = ctx.createLinearGradient(0, 0, 0, H);
+  bgG.addColorStop(0, '#040608'); bgG.addColorStop(1, '#07090c');
+  ctx.fillStyle = bgG; ctx.fillRect(0, 0, W, H);
+
+  // Floor grid
+  ctx.strokeStyle = 'rgba(20,35,50,.6)'; ctx.lineWidth = 1;
+  for (let y = H*0.78; y < H+20; y += 18) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  for (let x = 0; x < W; x += 30) {
+    ctx.beginPath(); ctx.moveTo(x, H*0.78); ctx.lineTo(x + 10, H+10); ctx.stroke();
+  }
+
+  // ── Car body ──
+  const bodyTop = H * 0.08;
+  const bodyBot = H * 0.78;
+
+  const bodyG = ctx.createLinearGradient(0, bodyTop, W*0.6, bodyBot);
+  bodyG.addColorStop(0, lighten(car.bodyColor, 15));
+  bodyG.addColorStop(0.4, car.bodyColor);
+  bodyG.addColorStop(1, car.accentColor);
+  ctx.fillStyle = bodyG;
+
+  switch(car.design) {
+    case 'angular':
+      ctx.beginPath();
+      ctx.moveTo(-2, bodyTop + H*0.12);
+      ctx.lineTo(W*0.12, bodyTop);
+      ctx.lineTo(W+2, bodyTop + H*0.04);
+      ctx.lineTo(W+2, bodyBot);
+      ctx.lineTo(-2, bodyBot);
+      ctx.closePath();
+      ctx.fill();
+      // Sharp crease line
+      ctx.strokeStyle = lighten(car.bodyColor, 30); ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-2, bodyTop + H*0.38);
+      ctx.lineTo(W+2, bodyTop + H*0.30);
+      ctx.stroke();
+      break;
+
+    case 'sweep':
+      ctx.beginPath();
+      ctx.moveTo(-2, bodyTop + H*0.18);
+      ctx.quadraticCurveTo(W*0.2, bodyTop, W+2, bodyTop + H*0.06);
+      ctx.lineTo(W+2, bodyBot);
+      ctx.lineTo(-2, bodyBot);
+      ctx.closePath();
+      ctx.fill();
+      // Sweep accent
+      ctx.strokeStyle = lighten(car.bodyColor, 20); ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-2, bodyTop + H*0.40);
+      ctx.quadraticCurveTo(W*0.5, bodyTop + H*0.25, W+2, bodyTop + H*0.32);
+      ctx.stroke();
+      break;
+
+    case 'tesla':
+      ctx.fillStyle = ctx.createLinearGradient(0, 0, W, H);
+      ((g) => {
+        g.addColorStop(0, '#d8dce8'); g.addColorStop(0.5, '#c8cdd8'); g.addColorStop(1, '#a8adb8');
+        ctx.fillStyle = g;
+      })(ctx.createLinearGradient(0, 0, W, H));
+      ctx.beginPath();
+      ctx.moveTo(-2, bodyTop + H*0.08);
+      ctx.lineTo(W*0.25, bodyTop);
+      ctx.lineTo(W+2, bodyTop + H*0.08);
+      ctx.lineTo(W+2, bodyBot);
+      ctx.lineTo(-2, bodyBot);
+      ctx.closePath();
+      ctx.fill();
+      // Pillar dark area (port side)
+      ctx.fillStyle = '#3a3f50';
+      ctx.beginPath();
+      ctx.moveTo(-2, bodyTop + H*0.08);
+      ctx.lineTo(W*0.35, bodyTop);
+      ctx.lineTo(W*0.35, bodyBot);
+      ctx.lineTo(-2, bodyBot);
+      ctx.closePath();
+      ctx.fill();
+      break;
+
+    case 'kidney':
+      ctx.beginPath();
+      ctx.moveTo(-2, bodyTop + H*0.05);
+      ctx.lineTo(W+2, bodyTop);
+      ctx.lineTo(W+2, bodyBot);
+      ctx.lineTo(-2, bodyBot);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = darken(car.bodyColor, 20);
+      ctx.fillRect(-2, bodyTop, W+4, H*0.04);
+      break;
+
+    case 'front':
+      // Front view - grille visible
+      ctx.beginPath();
+      ctx.moveTo(-2, bodyTop); ctx.lineTo(W+2, bodyTop);
+      ctx.lineTo(W+2, bodyBot); ctx.lineTo(-2, bodyBot); ctx.closePath();
+      ctx.fill();
+      // Grille
+      ctx.strokeStyle = darken(car.bodyColor, 40); ctx.lineWidth = 2;
+      for (let gx = W*0.15; gx < W*0.85; gx += 18) {
+        ctx.beginPath(); ctx.moveTo(gx, H*0.16); ctx.lineTo(gx, H*0.42); ctx.stroke();
+      }
+      ctx.strokeStyle = darken(car.bodyColor, 40); ctx.lineWidth = 2;
+      for (let gy = H*0.18; gy < H*0.40; gy += 14) {
+        ctx.beginPath(); ctx.moveTo(W*0.15, gy); ctx.lineTo(W*0.85, gy); ctx.stroke();
+      }
+      break;
+  }
+
+  // ── Wheel arch ──
+  if (car.design !== 'front') {
+    const wx = W * (car.portNormX > 0.5 ? 0.15 : 0.82);
+    ctx.fillStyle = '#030506';
+    ctx.beginPath();
+    ctx.ellipse(wx, bodyBot, W * 0.22, H * 0.14, 0, Math.PI, 0, true);
+    ctx.fill();
+    ctx.strokeStyle = darken(car.bodyColor, 30); ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  // ── Ambient light (sensor illumination) ──
+  const lightX = car.portNormX * W, lightY = car.portNormY * H;
+  const ambG = ctx.createRadialGradient(lightX, lightY, 0, lightX, lightY, 120);
+  ambG.addColorStop(0, 'rgba(150,200,255,.06)'); ambG.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = ambG; ctx.fillRect(0, 0, W, H);
+
+  // ── Port area ──
+  const px = car.portNormX * W, py = car.portNormY * H;
+  const pw = car.portW, ph = car.portH;
+
+  // Port recess
+  ctx.fillStyle = 'rgba(5,9,15,.95)';
+  ctx.strokeStyle = 'rgba(50,75,100,.7)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(px - pw/2, py - ph/2, pw, ph, 5);
+  ctx.fill(); ctx.stroke();
+
+  // Door flap (open)
+  const flapDir = car.portNormX > 0.5 ? -1 : 1;
+  const flapG = ctx.createLinearGradient(px + flapDir*pw*0.5, py, px + flapDir*pw, py);
+  flapG.addColorStop(0, lighten(car.bodyColor, 5)); flapG.addColorStop(1, car.bodyColor);
+  ctx.fillStyle = flapG;
+  ctx.beginPath();
+  if (flapDir < 0) {
+    ctx.moveTo(px - pw/2, py - ph/2);
+    ctx.lineTo(px - pw/2 - pw*0.7, py - ph/3);
+    ctx.lineTo(px - pw/2 - pw*0.7, py + ph/3);
+    ctx.lineTo(px - pw/2, py + ph/2);
+  } else {
+    ctx.moveTo(px + pw/2, py - ph/2);
+    ctx.lineTo(px + pw/2 + pw*0.7, py - ph/3);
+    ctx.lineTo(px + pw/2 + pw*0.7, py + ph/3);
+    ctx.lineTo(px + pw/2, py + ph/2);
+  }
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(60,90,110,.5)'; ctx.lineWidth = 1; ctx.stroke();
+
+  // Socket
+  if (car.portType === 'CCS2') drawCCS2(ctx, px, py, Math.min(pw, ph) * 0.85);
+  else if (car.portType === 'Tesla') drawTeslaPort(ctx, px, py, Math.min(pw, ph) * 0.8);
+
+  // ── Scan overlay ──
+  if (scanState === 'scanning' || scanState === 'detected') {
+    // Pulsing highlight over port
+    const t = Date.now() / 300;
+    const alpha = scanState === 'detected' ? 0.18 : (0.08 + 0.07 * Math.sin(t));
+    ctx.fillStyle = `rgba(0,220,255,${alpha})`;
+    ctx.beginPath(); ctx.roundRect(px - pw/2 - 4, py - ph/2 - 4, pw + 8, ph + 8, 7); ctx.fill();
+
+    if (scanState === 'scanning') {
+      // Corner markers
+      const mx = px - pw/2 - 8, my = py - ph/2 - 8, mw = pw + 16, mh = ph + 16;
+      ctx.strokeStyle = 'rgba(0,220,255,.8)'; ctx.lineWidth = 1.5;
+      const cs = 10;
+      [[mx,my],[mx+mw,my],[mx,my+mh],[mx+mw,my+mh]].forEach(([cx,cy], i) => {
+        ctx.beginPath();
+        if (i===0||i===2) { ctx.moveTo(cx,cy); ctx.lineTo(cx+cs,cy); ctx.moveTo(cx,cy); ctx.lineTo(cx,cy+cs); }
+        else              { ctx.moveTo(cx,cy); ctx.lineTo(cx-cs,cy); ctx.moveTo(cx,cy); ctx.lineTo(cx,cy+cs); }
+        ctx.stroke();
+      });
+    }
+  }
+
+  // ── Vignette ──
+  const vig = ctx.createRadialGradient(W/2, H/2, W*0.3, W/2, H/2, W*0.8);
+  vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, 'rgba(0,0,0,.55)');
+  ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+
+  // ── HUD text ──
+  ctx.fillStyle = 'rgba(0,220,255,.7)'; ctx.font = '9px IBM Plex Mono';
+  ctx.fillText(`RGB-D CAM | ${car.portType} | 30fps`, 10, 16);
+  ctx.fillText(`F${Math.floor(Math.random()*5+10+scanCount*3).toString().padStart(4,'0')}`, W-55, 16);
+  if (scanState !== 'idle') {
+    ctx.fillStyle = 'rgba(0,255,136,.8)';
+    ctx.fillText(`▶ SCANNING`, 10, H - 10);
+  }
+}
+
+// ── Socket drawers ──
+function drawCCS2(ctx, cx, cy, size) {
+  const r = size / 2;
+  // Outer housing
+  ctx.fillStyle = '#10181f'; ctx.strokeStyle = '#1e2d3e'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.ellipse(cx, cy - r*0.05, r, r*1.35, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  // AC part (top circle)
+  const acR = r * 0.52;
+  ctx.fillStyle = '#090e14';
+  ctx.beginPath(); ctx.ellipse(cx, cy - r*0.55, acR, acR*0.85, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  // AC pins
+  [[cx-acR*.38, cy-r*.72],[cx+acR*.38, cy-r*.72],[cx, cy-r*.37]].forEach(([px,py]) => {
+    ctx.fillStyle = '#2a4060';
+    ctx.beginPath(); ctx.ellipse(px, py, 2.5, 3, 0, 0, Math.PI*2); ctx.fill();
+  });
+  // DC part (bottom rect)
+  const dcW = r * 1.05, dcH = r * 0.46;
+  ctx.fillStyle = '#090e14';
+  ctx.beginPath(); ctx.roundRect(cx - dcW/2, cy + r*0.22, dcW, dcH, 5); ctx.fill(); ctx.stroke();
+  [cx-dcW*.3, cx+dcW*.3].forEach(px => {
+    ctx.fillStyle = '#2a4060';
+    ctx.beginPath(); ctx.ellipse(px, cy + r*0.46, 3.5, 4, 0, 0, Math.PI*2); ctx.fill();
+  });
+  // Glow
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r*1.1);
+  g.addColorStop(0, 'rgba(0,180,255,.08)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.ellipse(cx, cy, r*1.1, r*1.5, 0, 0, Math.PI*2); ctx.fill();
+}
+
+function drawTeslaPort(ctx, cx, cy, size) {
+  const r = size / 2;
+  ctx.fillStyle = '#10181f'; ctx.strokeStyle = '#1e2d3e'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(cx - r*0.75, cy - r, r*1.5, r*1.8, 8); ctx.fill(); ctx.stroke();
+  // Inner socket
+  ctx.fillStyle = '#090e14';
+  ctx.beginPath(); ctx.roundRect(cx - r*0.55, cy - r*0.7, r*1.1, r*1.2, 5); ctx.fill(); ctx.stroke();
+  // Tesla pins pattern
+  const pts = [[0,-.4],[-.3,-.1],[.3,-.1],[-.2,.25],[.2,.25]];
+  pts.forEach(([dx,dy]) => {
+    ctx.fillStyle = '#2a4060';
+    ctx.beginPath(); ctx.ellipse(cx + dx*r, cy + dy*r, 2.5, 3, 0, 0, Math.PI*2); ctx.fill();
+  });
+  // Glow
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  g.addColorStop(0, 'rgba(180,50,50,.06)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, cy, r, r*1.3, 0, 0, Math.PI*2); ctx.fill();
+}
+
+function lighten(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, (n>>16) + amt), g = Math.min(255, ((n>>8)&0xff) + amt), b = Math.min(255, (n&0xff) + amt);
+  return `rgb(${r},${g},${b})`;
+}
+function darken(hex, amt) { return lighten(hex, -amt); }
+
+// Init draw
+drawScene(currentCar);
+function selectCar(id) { currentCar = id; drawScene(id); hideDetection(); }
+
+// Animate scan loop
+let scanAnimId = null;
+function animScan() {
+  drawScene(currentCar, 'scanning');
+  scanAnimId = requestAnimationFrame(animScan);
+}
+function stopScan() {
+  if (scanAnimId) { cancelAnimationFrame(scanAnimId); scanAnimId = null; }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  3D ARM (Three.js)
+// ═══════════════════════════════════════════════════════════
+const armCanvas = document.getElementById('armCanvas');
+const armPanel = armCanvas.parentElement;
+
+const armRenderer = new THREE.WebGLRenderer({ canvas: armCanvas, antialias: true, alpha: true });
+armRenderer.setClearColor(0x050709, 1);
+armRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+const armScene = new THREE.Scene();
+armScene.fog = new THREE.FogExp2(0x050709, 0.04);
+
+const armCam = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+armCam.position.set(3, 4, 5);
+armCam.lookAt(0, 1, 0);
+
+function resizeArm() {
+  const w = armPanel.clientWidth, h = armPanel.clientHeight;
+  armRenderer.setSize(w, h, false);
+  armCam.aspect = w / h;
+  armCam.updateProjectionMatrix();
+}
+window.addEventListener('resize', resizeArm);
+resizeArm();
+
+// Lighting
+armScene.add(new THREE.AmbientLight(0x102535, 2));
+const armDir = new THREE.DirectionalLight(0x8090b0, 0.8);
+armDir.position.set(3, 5, 3); armScene.add(armDir);
+const armGlow = new THREE.PointLight(0x00dcff, 1.5, 8);
+armGlow.position.set(0, 2, 0); armScene.add(armGlow);
+
+// Rail (horizontal bar at top)
+const railMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(4, 0.15, 0.15),
+  new THREE.MeshLambertMaterial({ color: 0x00dcff, emissive: 0x00aacc, emissiveIntensity: 0.4 })
+);
+railMesh.position.set(0, 3, 0); armScene.add(railMesh);
+
+// Ground plane
+const gnd = new THREE.Mesh(
+  new THREE.PlaneGeometry(8, 8),
+  new THREE.MeshLambertMaterial({ color: 0x080c12 })
+);
+gnd.rotation.x = -Math.PI/2; armScene.add(gnd);
+
+// Car silhouette (flat box)
+const carMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(2.4, 0.5, 1.0),
+  new THREE.MeshLambertMaterial({ color: 0x1e2d3e })
+);
+carMesh.position.set(0.5, 0.25, 0); armScene.add(carMesh);
+
+// Port indicator on car
+const portIndicator = new THREE.Mesh(
+  new THREE.BoxGeometry(0.18, 0.18, 0.05),
+  new THREE.MeshLambertMaterial({ color: 0xff3322, emissive: 0xff1100, emissiveIntensity: 0.8 })
+);
+portIndicator.position.set(0.8, 0.52, 0); armScene.add(portIndicator);
+
+// ── Arm segments ──
+const ARM_MAT_BASE = new THREE.MeshLambertMaterial({ color: 0x1a2535 });
+const ARM_MAT_JOINT = new THREE.MeshLambertMaterial({ color: 0x00dcff, emissive: 0x008899, emissiveIntensity: 0.5 });
+const ARM_MAT_EE = new THREE.MeshLambertMaterial({ color: 0x00ff88, emissive: 0x00cc66, emissiveIntensity: 0.6 });
+
+// Arm group (pivots at base)
+const armGroup = new THREE.Group();
+armGroup.position.set(0, 3, 0);
+armScene.add(armGroup);
+
+// Base plate
+const base = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.15, 8), ARM_MAT_BASE);
+armGroup.add(base);
+
+// Segment 1 (shoulder → elbow, extends down)
+const seg1Group = new THREE.Group();
+const seg1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 0.1), ARM_MAT_BASE);
+seg1.position.y = -0.45;
+seg1Group.add(seg1);
+const joint1 = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), ARM_MAT_JOINT);
+joint1.position.y = -0.9;
+seg1Group.add(joint1);
+armGroup.add(seg1Group);
+
+// Segment 2 (elbow → wrist)
+const seg2Group = new THREE.Group();
+seg2Group.position.y = -0.9;
+const seg2 = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.7, 0.09), ARM_MAT_BASE);
+seg2.position.y = -0.35;
+seg2Group.add(seg2);
+const joint2 = new THREE.Mesh(new THREE.SphereGeometry(0.10, 8, 8), ARM_MAT_JOINT);
+joint2.position.y = -0.7;
+seg2Group.add(joint2);
+seg1Group.add(seg2Group);
+
+// Segment 3 (wrist → end effector)
+const seg3Group = new THREE.Group();
+seg3Group.position.y = -0.7;
+const seg3 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.45, 0.08), ARM_MAT_BASE);
+seg3.position.y = -0.225;
+seg3Group.add(seg3);
+// End effector (connector)
+const ee = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.12, 8), ARM_MAT_EE);
+ee.position.y = -0.5;
+seg3Group.add(ee);
+seg2Group.add(seg3Group);
+
+// Arm glow light at end effector
+const eeLight = new THREE.PointLight(0x00ff88, 0, 3);
+seg3Group.position.y = -0.7;
+armScene.add(eeLight);
+
+// Arm poses (angles in radians for each segment group)
+const ARM_POSES = {
+  home:    { s1r: 0,    s1rx: 0,    s2r: 0,    s3r: 0    },
+  approach:{ s1r: 0.3,  s1rx:-0.2,  s2r: 0.3,  s3r: 0.2  },
+  align:   { s1r: 0.4,  s1rx:-0.3,  s2r: 0.5,  s3r: 0.4  },
+  insert:  { s1r: 0.45, s1rx:-0.38, s2r: 0.65, s3r: 0.55 },
+  lock:    { s1r: 0.45, s1rx:-0.38, s2r: 0.65, s3r: 0.58 },
+  done:    { s1r: 0.45, s1rx:-0.38, s2r: 0.65, s3r: 0.57 },
+};
+
+let currentPose = { ...ARM_POSES.home };
+let targetPose  = { ...ARM_POSES.home };
+let armT = 1;
+
+function setArmPose(poseName, duration=1) {
+  targetPose = { ...ARM_POSES[poseName] };
+  armT = 0;
+  armDuration = duration;
+}
+let armDuration = 1;
+
+function lerpArm(dt) {
+  if (armT >= 1) return;
+  armT = Math.min(1, armT + dt / armDuration);
+  const ease = armT < 0.5 ? 2*armT*armT : -1+(4-2*armT)*armT;
+  for (const k of Object.keys(targetPose)) {
+    currentPose[k] = currentPose[k] + (targetPose[k] - currentPose[k]) * ease * 0.08;
+  }
+  applyArmPose();
+}
+
+function applyArmPose() {
+  seg1Group.rotation.z = currentPose.s1r;
+  seg1Group.rotation.x = currentPose.s1rx;
+  seg2Group.rotation.z = currentPose.s2r;
+  seg3Group.rotation.z = currentPose.s3r;
+  // Update EE light position
+  const eePos = new THREE.Vector3();
+  ee.getWorldPosition(eePos);
+  eeLight.position.copy(eePos);
+}
+
+// Arm render loop
+let prevArmT = 0;
+function armAnimate(ts) {
+  requestAnimationFrame(armAnimate);
+  const dt = Math.min((ts - prevArmT) / 1000, 0.1);
+  prevArmT = ts;
+  lerpArm(dt);
+  // Pulse EE light
+  eeLight.intensity = eeLight.intensity > 0 ? (0.8 + Math.sin(ts/400)*0.5) : 0;
+  armRenderer.render(armScene, armCam);
+}
+armAnimate(0);
+
+// ═══════════════════════════════════════════════════════════
+//  VLA SCAN (Claude API)
+// ═══════════════════════════════════════════════════════════
+const VLA_SYSTEM = `You are NAERIDAE-VLA v2.0, an embedded Vision-Language-Action model running aboard the 내리다 autonomous EV charging robot.
+
+Your task: Analyze the camera image from the robot's RGB-D vision module and generate a precise charging action plan.
+
+CRITICAL RULES:
+- Return ONLY valid JSON. No markdown, no code blocks, no extra text.
+- All description_ko fields must be in Korean.
+- Be realistic and specific to the car model visible in the image.
+- Pixel coordinates are relative to 480×300 image dimensions.
+
+Return this exact JSON structure:
+{
+  "identification": {
+    "car_make": "string (브랜드명, 한글)",
+    "car_model": "string (모델명)",
+    "confidence": 0.00,
+    "color": "string (색상, 한글)"
+  },
+  "port_detection": {
+    "port_type": "CCS2 | Tesla | CHAdeMO | AC_Type2",
+    "pixel_x": 0,
+    "pixel_y": 0,
+    "bbox": {"x1":0,"y1":0,"x2":0,"y2":0},
+    "door_status": "open | closed",
+    "confidence": 0.00
+  },
+  "spatial_estimation": {
+    "distance_cm": 0,
+    "lateral_offset_cm": 0,
+    "vertical_offset_cm": 0,
+    "approach_angle_deg": 0.0
+  },
+  "action_plan": [
+    {"seq":1,"type":"approach","description_ko":"string","duration_ms":0},
+    {"seq":2,"type":"align_x","description_ko":"string","duration_ms":0},
+    {"seq":3,"type":"align_y","description_ko":"string","duration_ms":0},
+    {"seq":4,"type":"open_door","description_ko":"string","duration_ms":0},
+    {"seq":5,"type":"insert","description_ko":"string","duration_ms":0},
+    {"seq":6,"type":"lock_and_charge","description_ko":"string","duration_ms":0}
+  ],
+  "risk": {
+    "obstacles": false,
+    "success_probability": 0.00,
+    "fallback": "manual | retry | skip"
+  },
+  "reasoning_ko": "string (2~3문장, 한국어로 분석 결과 설명)"
+}`;
+
+async function runScan() {
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="icon">⏳</span> 분석 중...';
+
+  // Status
+  setChip('chipStatus', '분석중', 'warn');
+  document.getElementById('camBadge').textContent = 'SCANNING';
+  document.getElementById('camBadge').className = 'ph-badge live';
+  document.getElementById('vlaBadge').textContent = 'PROCESSING';
+  document.getElementById('vlaBadge').className = 'ph-badge live';
+  document.getElementById('scStatus').textContent = '추론 중...';
+  document.getElementById('scStatus').className = 'sc-status thinking';
+  document.getElementById('streamText').innerHTML = '<span class="cursor"></span>';
+  document.getElementById('scanLine').classList.add('active');
+  hideDetection();
+
+  // Start scan animation
+  animScan();
+  setArmPose('approach', 1.5);
+
+  // Get canvas image
+  const img64 = camCanvas.toDataURL('image/png').split(',')[1];
+  const car = CAR_MODELS[currentCar];
+
+  let fullText = '';
+  let parsed = null;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        stream: true,
+        system: VLA_SYSTEM,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type:'base64', media_type:'image/png', data: img64 }},
+            { type: 'text',  text: `차량 컨텍스트: ${car.name}, 포트 타입: ${car.portType}\n카메라 이미지를 분석하여 충전 액션 플랜을 JSON으로 생성하세요.` }
+          ]
+        }]
+      })
+    });
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    const streamEl = document.getElementById('streamText');
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6);
+        if (raw === '[DONE]') break;
+        try {
+          const ev = JSON.parse(raw);
+          if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+            fullText += ev.delta.text;
+            streamEl.innerHTML = `<span style="color:var(--tx3)">${escHtml(fullText)}</span><span class="cursor"></span>`;
+            streamEl.parentElement.scrollTop = streamEl.parentElement.scrollHeight;
+          }
+        } catch {}
+      }
+    }
+
+    // Parse JSON
+    const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try { parsed = JSON.parse(jsonMatch[0]); } catch {}
+    }
+
+  } catch (err) {
+    document.getElementById('streamText').innerHTML = `<span style="color:var(--red)">오류: ${err.message}</span>`;
+  }
+
+  // Done
+  stopScan();
+  document.getElementById('scanLine').classList.remove('active');
+  document.getElementById('scStatus').textContent = '완료';
+  document.getElementById('scStatus').className = 'sc-status done';
+  document.getElementById('camBadge').textContent = 'DETECTED';
+  document.getElementById('camBadge').className = 'ph-badge ok';
+  document.getElementById('vlaBadge').textContent = 'DONE';
+  document.getElementById('vlaBadge').className = 'ph-badge ok';
+
+  if (parsed) {
+    displayDetection(parsed);
+    displayActions(parsed.action_plan || []);
+    showPortOverlay(parsed);
+    drawScene(currentCar, 'detected');
+    runArmSequence(parsed.action_plan || []);
+
+    // Stats
+    scanCount++;
+    const conf = parsed.port_detection?.confidence || 0;
+    totalConf += conf;
+    if (parsed.port_detection?.port_type) seenTypes.add(parsed.port_detection.port_type);
+    if ((parsed.risk?.success_probability || 0) > 0.7) successCount++;
+
+    document.getElementById('statScans').textContent = scanCount;
+    document.getElementById('statConf').textContent = (totalConf/scanCount*100).toFixed(0) + '%';
+    document.getElementById('statTypes').textContent = [...seenTypes].join(', ') || '—';
+    document.getElementById('statSuccess').textContent = (successCount/scanCount*100).toFixed(0) + '%';
+    setChip('chipAcc', `정확도 ${(conf*100).toFixed(0)}%`, conf > 0.85 ? 'ok' : conf > 0.65 ? 'warn' : 'err');
+    setChip('chipStatus', '성공', 'ok');
+  } else {
+    drawScene(currentCar, 'idle');
+    setChip('chipStatus', '파싱 오류', 'err');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<span class="icon">⚡</span> VLA 스캔 실행';
+}
+
+// ── Display helpers ──
+function displayDetection(d) {
+  const det = document.getElementById('detSection');
+  det.style.display = 'block';
+
+  const grid = document.getElementById('detGrid');
+  const ident = d.identification || {};
+  const port  = d.port_detection || {};
+  const risk  = d.risk || {};
+
+  grid.innerHTML = `
+    <div class="det-card">
+      <div class="det-label">차량 식별</div>
+      <div class="det-val">${ident.car_make || '—'}</div>
+      <div class="det-sub">${ident.car_model || '—'} · ${ident.color || '—'}</div>
+      <div class="conf-bar"><div class="conf-fill" style="width:${((ident.confidence||0)*100).toFixed(0)}%"></div></div>
+    </div>
+    <div class="det-card">
+      <div class="det-label">포트 유형</div>
+      <div class="det-val">${port.port_type || '—'}</div>
+      <div class="det-sub">상태: ${port.door_status === 'open' ? '🟢 열림' : '🔴 닫힘'}</div>
+      <div class="conf-bar"><div class="conf-fill" style="width:${((port.confidence||0)*100).toFixed(0)}%"></div></div>
+    </div>
+    <div class="det-card">
+      <div class="det-label">포트 좌표 (픽셀)</div>
+      <div class="det-val">(${port.pixel_x||0}, ${port.pixel_y||0})</div>
+      <div class="det-sub">신뢰도 ${((port.confidence||0)*100).toFixed(0)}%</div>
+    </div>
+    <div class="det-card">
+      <div class="det-label">성공 예측</div>
+      <div class="det-val" style="color:${(risk.success_probability||0)>0.85?'var(--green)':'var(--amber)'}">${((risk.success_probability||0)*100).toFixed(0)}%</div>
+      <div class="det-sub">폴백: ${risk.fallback || '—'}</div>
+      <div class="conf-bar" style=""><div class="conf-fill" style="width:${((risk.success_probability||0)*100).toFixed(0)}%;background:${(risk.success_probability||0)>0.85?'var(--green)':'var(--amber)'}"></div></div>
+    </div>`;
+
+  const sp = d.spatial_estimation || {};
+  document.getElementById('spatialGrid').innerHTML = `
+    <div class="sp-card"><div class="sp-axis">거리 (Z)</div><div class="sp-val">${sp.distance_cm||'—'}</div><div class="sp-unit">cm</div></div>
+    <div class="sp-card"><div class="sp-axis">좌우 오프셋 (X)</div><div class="sp-val">${sp.lateral_offset_cm||'—'}</div><div class="sp-unit">cm</div></div>
+    <div class="sp-card"><div class="sp-axis">접근 각도</div><div class="sp-val">${sp.approach_angle_deg||'—'}</div><div class="sp-unit">°</div></div>`;
+
+  // Update stream text with reasoning
+  const streamEl = document.getElementById('streamText');
+  if (d.reasoning_ko) streamEl.innerHTML = `<span style="color:var(--tx)">${escHtml(d.reasoning_ko)}</span>`;
+
+  // Cam info
+  document.getElementById('portCoords').textContent = `${(d.port_detection?.pixel_x||0)}, ${(d.port_detection?.pixel_y||0)}`;
+  document.getElementById('portConf').textContent    = `${((d.port_detection?.confidence||0)*100).toFixed(0)}%`;
+}
+
+function hideDetection() {
+  document.getElementById('detSection').style.display = 'none';
+  document.getElementById('portBox').classList.remove('show');
+  document.getElementById('portCross').classList.remove('show');
+  document.getElementById('portCoords').textContent = '— , —';
+  document.getElementById('portConf').textContent = '—%';
+}
+
+function showPortOverlay(d) {
+  const port = d.port_detection;
+  if (!port || !port.bbox) return;
+  const b = port.bbox;
+  const box = document.getElementById('portBox');
+  const cross = document.getElementById('portCross');
+  const cRect = camCanvas.getBoundingClientRect();
+  const sx = cRect.width / 480, sy = cRect.height / 300;
+  box.style.left   = `${b.x1 * sx}px`;
+  box.style.top    = `${b.y1 * sy}px`;
+  box.style.width  = `${(b.x2-b.x1)*sx}px`;
+  box.style.height = `${(b.y2-b.y1)*sy}px`;
+  box.setAttribute('data-label', `${port.port_type} · ${((port.confidence||0)*100).toFixed(0)}%`);
+  box.classList.add('show');
+  cross.style.left = `${port.pixel_x * sx}px`;
+  cross.style.top  = `${port.pixel_y * sy}px`;
+  cross.classList.add('show');
+}
+
+// ── Action steps ──
+const STEP_ICONS = { approach:'🔽', align_x:'↔️', align_y:'↕️', open_door:'🚪', insert:'🔌', lock_and_charge:'⚡', default:'⚙️' };
+
+function displayActions(actions) {
+  const body = document.getElementById('actionBody');
+  if (!actions.length) return;
+  body.innerHTML = actions.map((a, i) => `
+    <div class="action-step pending" id="step${i}">
+      <div class="step-num">${a.seq}</div>
+      <div>
+        <div class="step-desc">${STEP_ICONS[a.type]||STEP_ICONS.default} ${escHtml(a.description_ko)}</div>
+        <div class="step-type">${a.type}</div>
+      </div>
+      <div class="step-dur">${a.duration_ms}ms</div>
+      <div class="step-prog" id="prog${i}"><div class="step-prog-fill" id="progf${i}"></div></div>
+    </div>`).join('');
+  document.getElementById('actBadge').textContent = 'READY';
+  document.getElementById('actBadge').className = 'ph-badge ok';
+}
+
+// ── Arm sequence ──
+const ARM_POSE_MAP = ['approach','align','align','open_door','insert','lock'];
+// Actually map to pose names:
+const SEQ_POSES = ['approach','align','align','insert','insert','lock'];
+
+async function runArmSequence(actions) {
+  document.getElementById('armBadge').textContent = 'RUNNING';
+  document.getElementById('armBadge').className = 'ph-badge live';
+  portIndicator.material.emissive.set(0x4499ff);
+
+  for (let i = 0; i < actions.length; i++) {
+    const a = actions[i];
+    const dur = (a.duration_ms || 500) / 1000 * 0.8; // scale for demo
+
+    // Update step UI
+    const prevStep = document.getElementById(`step${i-1}`);
+    if (prevStep) { prevStep.className = 'action-step done'; }
+    const stepEl = document.getElementById(`step${i}`);
+    if (stepEl) {
+      stepEl.className = 'action-step active';
+      const progWrap = document.getElementById(`prog${i}`);
+      const progFill = document.getElementById(`progf${i}`);
+      if (progWrap) progWrap.classList.add('show');
+      if (progFill) {
+        progFill.style.transition = `width ${dur}s linear`;
+        setTimeout(() => { progFill.style.width = '100%'; }, 50);
+      }
+    }
+
+    // Move arm
+    const pose = SEQ_POSES[Math.min(i, SEQ_POSES.length-1)];
+    setArmPose(pose, Math.max(0.5, dur * 0.7));
+    eeLight.intensity = i >= 4 ? 2 : 0.8;
+
+    // Wait
+    await sleep(dur * 1000 + 100);
+  }
+
+  // All done
+  const last = document.getElementById(`step${actions.length-1}`);
+  if (last) last.className = 'action-step done';
+  portIndicator.material.color.set(0x119944);
+  portIndicator.material.emissive.set(0x004422);
+  document.getElementById('armBadge').textContent = 'DONE';
+  document.getElementById('armBadge').className = 'ph-badge ok';
+  document.getElementById('actBadge').textContent = 'COMPLETE';
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function setChip(id, text, cls) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = `chip ${cls||''}`;
+}
+</script>
+</body>
+</html>

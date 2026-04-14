@@ -1,0 +1,504 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+#sim-wrap{background:#1a1f2e;border-radius:var(--border-radius-lg);overflow:hidden;border:0.5px solid var(--color-border-secondary)}
+#top-bar{background:#111827;padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #374151}
+#top-bar .logo{background:#2563eb;color:#fff;font-size:12px;font-weight:500;padding:3px 10px;border-radius:20px}
+#top-bar .title{color:#e5e7eb;font-size:13px;font-weight:500}
+#top-bar .badge{margin-left:auto;background:#065f46;color:#6ee7b7;font-size:11px;padding:2px 8px;border-radius:10px}
+#main{display:flex;gap:0}
+canvas#lot{display:block;flex-shrink:0;cursor:pointer}
+#panel{width:190px;background:#111827;padding:14px;display:flex;flex-direction:column;gap:10px;border-left:1px solid #374151}
+.p-section{background:#1f2937;border-radius:8px;padding:10px}
+.p-label{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.p-val{font-size:20px;font-weight:500;color:#f9fafb}
+.p-sub{font-size:11px;color:#6b7280;margin-top:2px}
+#status-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500}
+.status-idle{background:#1e3a5f;color:#93c5fd}
+.status-moving{background:#1e3a4f;color:#67e8f9}
+.status-charging{background:#064e3b;color:#6ee7b7}
+.status-done{background:#3b2100;color:#fcd34d}
+#batt-bar{height:6px;background:#374151;border-radius:3px;overflow:hidden;margin-top:6px}
+#batt-fill{height:100%;border-radius:3px;transition:width .5s}
+#log{background:#1f2937;border-radius:8px;padding:8px;font-size:10px;color:#6b7280;max-height:90px;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
+.log-entry{color:#9ca3af;line-height:1.4}
+.log-entry span{color:#60a5fa}
+#call-btn{background:#2563eb;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:500;cursor:pointer;width:100%;transition:background .15s}
+#call-btn:hover{background:#1d4ed8}
+#call-btn:disabled{background:#374151;color:#6b7280;cursor:default}
+#reset-btn{background:transparent;color:#9ca3af;border:0.5px solid #374151;border-radius:8px;padding:6px;font-size:12px;cursor:pointer;width:100%}
+#reset-btn:hover{background:#1f2937}
+.stat-row{display:flex;justify-content:space-between;align-items:center;margin-top:4px}
+.stat-k{font-size:11px;color:#6b7280}
+.stat-v{font-size:11px;font-weight:500;color:#d1d5db}
+#legend{display:flex;gap:10px;padding:8px 14px;background:#111827;border-top:1px solid #374151;flex-wrap:wrap}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:10px;color:#6b7280}
+.leg-dot{width:10px;height:10px;border-radius:2px}
+</style>
+
+<h2 class="sr-only">내리다 EV 충전 로봇 시뮬레이션 — 천장 레일 기반 이동형 충전 시스템 인터랙티브 데모</h2>
+
+<div id="sim-wrap">
+  <div id="top-bar">
+    <div class="logo">내리다</div>
+    <div class="title">레일 기반 EV 충전 로봇 시뮬레이터</div>
+    <div class="badge" id="sys-badge">시스템 정상</div>
+  </div>
+
+  <div id="main">
+    <canvas id="lot" width="460" height="360"></canvas>
+
+    <div id="panel">
+      <div class="p-section">
+        <div class="p-label">로봇 상태</div>
+        <div id="status-badge" class="status-idle">대기중</div>
+        <div class="stat-row" style="margin-top:8px">
+          <span class="stat-k">현재 위치</span>
+          <span class="stat-v" id="robot-pos">홈 (A1)</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-k">이동 거리</span>
+          <span class="stat-v" id="travel-dist">0m</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-k">총 충전 횟수</span>
+          <span class="stat-v" id="charge-count">0회</span>
+        </div>
+      </div>
+
+      <div class="p-section" id="car-panel">
+        <div class="p-label">선택된 차량</div>
+        <div id="car-info" style="color:#4b5563;font-size:12px">차량을 클릭하여 선택하세요</div>
+      </div>
+
+      <div class="p-section" id="charge-panel" style="display:none">
+        <div class="p-label">충전 현황</div>
+        <div style="display:flex;align-items:baseline;gap:4px">
+          <div class="p-val" id="batt-pct">-</div>
+          <div style="font-size:13px;color:#6b7280">%</div>
+        </div>
+        <div id="batt-bar"><div id="batt-fill"></div></div>
+        <div class="stat-row" style="margin-top:6px">
+          <span class="stat-k">충전 속도</span>
+          <span class="stat-v">7.2 kW</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-k">예상 완료</span>
+          <span class="stat-v" id="eta">-</span>
+        </div>
+      </div>
+
+      <button id="call-btn" disabled onclick="callRobot()">충전 호출</button>
+      <button id="reset-btn" onclick="resetSim()">초기화</button>
+
+      <div>
+        <div class="p-label" style="padding:0 0 4px 0">이벤트 로그</div>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:#374151"></div>빈 주차면</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#1e40af"></div>EV (대기)</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#15803d"></div>충전중</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#92400e"></div>완충</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#2563eb;border-radius:50%"></div>충전 로봇</div>
+    <div class="leg-item"><div style="width:20px;height:2px;background:#3b82f6;opacity:.4"></div>레일</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('lot');
+const ctx = canvas.getContext('2d');
+
+const W = canvas.width, H = canvas.height;
+const COLS = 5, ROWS = 3;
+const PAD_L = 30, PAD_T = 30, PAD_R = 10, PAD_B = 30;
+const CW = Math.floor((W - PAD_L - PAD_R) / COLS);
+const CH = Math.floor((H - PAD_T - PAD_B) / ROWS);
+
+const COLORS = {
+  bg: '#111827', lane: '#1e2535', space: '#1f2937', spaceBorder: '#374151',
+  rail: '#1e3a5f', railLine: '#3b82f6', robot: '#2563eb', robotGlow: '#60a5fa',
+  carNormal: '#1e3a8a', carCharging: '#14532d', carFull: '#78350f',
+  carText: '#bfdbfe', cable: '#fbbf24', empty: '#374151'
+};
+
+const cars = [
+  { id:0, col:0, row:0, brand:'아이오닉 5', plate:'12가 3456', battery:23, color:'#ef4444', state:'idle' },
+  { id:1, col:1, row:0, brand:'EV6', plate:'34나 7890', battery:61, color:'#f59e0b', state:'idle' },
+  { id:2, col:3, row:0, brand:'테슬라 M3', plate:'56다 1234', battery:12, color:'#8b5cf6', state:'idle' },
+  { id:3, col:0, row:1, brand:'BMW iX', plate:'78라 5678', battery:45, color:'#06b6d4', state:'idle' },
+  { id:4, col:2, row:1, brand:'GV60', plate:'90마 9012', battery:78, color:'#10b981', state:'idle' },
+  { id:5, col:4, row:1, brand:'VW ID.4', plate:'11바 3456', battery:35, color:'#f97316', state:'idle' },
+  { id:6, col:1, row:2, brand:'아이오닉 6', plate:'33사 7890', battery:55, color:'#ec4899', state:'idle' },
+  { id:7, col:3, row:2, brand:'코나 EV', plate:'55아 1234', battery:18, color:'#84cc16', state:'idle' },
+];
+
+const robot = { x: 0, y: 0, tx: 0, ty: 0, state: 'idle', targetCar: null, cableLen: 0, chargeTimer: 0 };
+let selectedCar = null;
+let chargeCount = 0;
+let totalDist = 0;
+let animFrame = null;
+let lastT = 0;
+
+function getCellCenter(col, row) {
+  return {
+    x: PAD_L + col * CW + CW / 2,
+    y: PAD_T + row * CH + CH / 2
+  };
+}
+
+function getRailPos(col, row) {
+  return getCellCenter(col, row);
+}
+
+function log(msg, color = '#60a5fa') {
+  const el = document.getElementById('log');
+  const now = new Date();
+  const t = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerHTML = `<span style="color:#4b5563">${t}</span> <span style="color:${color}">${msg}</span>`;
+  el.prepend(div);
+  while(el.children.length > 12) el.removeChild(el.lastChild);
+}
+
+function drawRails() {
+  ctx.strokeStyle = COLORS.railLine;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.25;
+  for(let c = 0; c <= COLS; c++) {
+    const x = PAD_L + c * CW;
+    ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, H - PAD_B); ctx.stroke();
+  }
+  for(let r = 0; r <= ROWS; r++) {
+    const y = PAD_T + r * CH;
+    ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawSpace(col, row) {
+  const x = PAD_L + col * CW;
+  const y = PAD_T + row * CH;
+  const m = 4;
+  ctx.fillStyle = COLORS.space;
+  ctx.fillRect(x + m, y + m, CW - m*2, CH - m*2);
+  ctx.strokeStyle = COLORS.spaceBorder;
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(x + m, y + m, CW - m*2, CH - m*2);
+  ctx.fillStyle = '#2d3748';
+  ctx.font = '9px monospace';
+  ctx.fillText(`${String.fromCharCode(65+col)}${row+1}`, x + 8, y + CH - 8);
+}
+
+function drawCar(car, highlight) {
+  const cx = PAD_L + car.col * CW + CW / 2;
+  const cy = PAD_T + car.row * CH + CH / 2;
+  const cw = CW - 20, ch = CH - 28;
+  const x = cx - cw/2, y = cy - ch/2;
+
+  let bgColor = COLORS.carNormal;
+  if(car.state === 'charging') bgColor = COLORS.carCharging;
+  else if(car.battery >= 95) bgColor = COLORS.carFull;
+
+  ctx.fillStyle = bgColor;
+  ctx.beginPath();
+  ctx.roundRect(x, y, cw, ch, 4);
+  ctx.fill();
+
+  if(highlight) {
+    ctx.strokeStyle = '#f9fafb';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = car.color;
+  ctx.beginPath();
+  ctx.roundRect(x+4, y+4, cw-8, 14, 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#fff';
+  ctx.font = `500 9px var(--font-sans, system-ui)`;
+  ctx.textAlign = 'center';
+  ctx.fillText(car.brand, cx, y + 14);
+
+  const bw = cw - 12, bh = 5;
+  const bx = x + 6, by = cy + 2;
+  ctx.fillStyle = '#374151';
+  ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 2); ctx.fill();
+  const pct = Math.min(car.battery, 100) / 100;
+  const bc = pct < 0.2 ? '#ef4444' : pct < 0.5 ? '#f59e0b' : '#22c55e';
+  ctx.fillStyle = bc;
+  ctx.beginPath(); ctx.roundRect(bx, by, bw * pct, bh, 2); ctx.fill();
+
+  ctx.fillStyle = '#9ca3af';
+  ctx.font = '9px system-ui';
+  ctx.fillText(`${Math.round(car.battery)}%`, cx, cy + 16);
+
+  if(car.state === 'charging') {
+    const t = Date.now() / 600;
+    ctx.fillStyle = `rgba(34,197,94,${0.4 + 0.3 * Math.sin(t)})`;
+    ctx.font = '11px system-ui';
+    ctx.fillText('⚡', cx, y - 4);
+  }
+
+  ctx.textAlign = 'left';
+}
+
+function drawRobot() {
+  const r = 10;
+  ctx.fillStyle = COLORS.robot;
+  ctx.beginPath();
+  ctx.arc(robot.x, robot.y, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#93c5fd';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(robot.x, robot.y, r + 3, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 9px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('R', robot.x, robot.y + 3);
+  ctx.textAlign = 'left';
+
+  if(robot.cableLen > 0) {
+    ctx.strokeStyle = COLORS.cable;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([3, 2]);
+    ctx.beginPath();
+    ctx.moveTo(robot.x, robot.y + r);
+    ctx.lineTo(robot.x, robot.y + r + robot.cableLen);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = COLORS.cable;
+    ctx.beginPath();
+    ctx.arc(robot.x, robot.y + r + robot.cableLen, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawScene() {
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  drawRails();
+
+  for(let r = 0; r < ROWS; r++)
+    for(let c = 0; c < COLS; c++)
+      drawSpace(c, r);
+
+  cars.forEach(car => drawCar(car, car === selectedCar));
+  drawRobot();
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function tick(ts) {
+  const dt = Math.min((ts - lastT) / 1000, 0.05);
+  lastT = ts;
+
+  const SPEED = 80;
+
+  if(robot.state === 'moving') {
+    const dx = robot.tx - robot.x;
+    const dy = robot.ty - robot.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if(dist < 2) {
+      robot.x = robot.tx; robot.y = robot.ty;
+      if(robot.targetCar) {
+        robot.state = 'descending';
+        log(`도착: ${robot.targetCar.brand} 위치`,'#34d399');
+      } else {
+        robot.state = 'idle';
+        updateStatusUI();
+      }
+    } else {
+      const step = Math.min(SPEED * dt, dist);
+      robot.x += (dx/dist)*step;
+      robot.y += (dy/dist)*step;
+    }
+  }
+
+  if(robot.state === 'descending') {
+    robot.cableLen = Math.min(robot.cableLen + 40*dt, 28);
+    if(robot.cableLen >= 28) {
+      robot.state = 'charging';
+      if(robot.targetCar) robot.targetCar.state = 'charging';
+      log(`충전 시작: ${robot.targetCar?.brand}`,'#6ee7b7');
+      document.getElementById('charge-panel').style.display = 'block';
+      updateStatusUI();
+    }
+  }
+
+  if(robot.state === 'charging') {
+    robot.chargeTimer += dt;
+    if(robot.targetCar) {
+      robot.targetCar.battery = Math.min(robot.targetCar.battery + 12 * dt, 95);
+      const pct = Math.round(robot.targetCar.battery);
+      document.getElementById('batt-pct').textContent = pct;
+      document.getElementById('batt-fill').style.width = pct + '%';
+      document.getElementById('batt-fill').style.background = pct < 20 ? '#ef4444' : pct < 50 ? '#f59e0b' : '#22c55e';
+      const remaining = Math.ceil((95 - robot.targetCar.battery) / 12);
+      document.getElementById('eta').textContent = remaining > 0 ? `약 ${remaining}초` : '거의 완료';
+
+      if(robot.targetCar.battery >= 95) {
+        robot.state = 'ascending';
+        robot.targetCar.state = 'full';
+        robot.targetCar.battery = 95;
+        chargeCount++;
+        document.getElementById('charge-count').textContent = chargeCount + '회';
+        log(`충전 완료: ${robot.targetCar.brand} (95%)`,'#fcd34d');
+        document.getElementById('charge-panel').style.display = 'none';
+        updateStatusUI();
+      }
+    }
+  }
+
+  if(robot.state === 'ascending') {
+    robot.cableLen = Math.max(robot.cableLen - 40*dt, 0);
+    if(robot.cableLen <= 0) {
+      robot.state = 'returning';
+      const home = getRailPos(0, 0);
+      robot.tx = home.x; robot.ty = home.y;
+      log('홈으로 귀환 중', '#60a5fa');
+      updateStatusUI();
+    }
+  }
+
+  if(robot.state === 'returning') {
+    const dx = robot.tx - robot.x;
+    const dy = robot.ty - robot.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if(dist < 2) {
+      robot.x = robot.tx; robot.y = robot.ty;
+      robot.state = 'idle';
+      robot.targetCar = null;
+      log('홈 도착 — 대기중', '#93c5fd');
+      updateStatusUI();
+      document.getElementById('call-btn').disabled = !selectedCar;
+    } else {
+      const step = Math.min(SPEED * dt, dist);
+      robot.x += (dx/dist)*step;
+      robot.y += (dy/dist)*step;
+    }
+  }
+
+  const pos = getRailPos(0, 0);
+  const distFromHome = Math.sqrt((robot.x-pos.x)**2 + (robot.y-pos.y)**2);
+  totalDist = Math.round(distFromHome * 0.05 * 10) / 10;
+  document.getElementById('robot-pos').textContent = robot.state === 'idle' ? '홈 (A1)' : '이동중';
+  document.getElementById('travel-dist').textContent = totalDist.toFixed(1) + 'm';
+
+  drawScene();
+  animFrame = requestAnimationFrame(tick);
+}
+
+function updateStatusUI() {
+  const badge = document.getElementById('status-badge');
+  const states = {
+    idle: ['대기중', 'status-idle'],
+    moving: ['이동중', 'status-moving'],
+    descending: ['접근중', 'status-moving'],
+    charging: ['충전중', 'status-charging'],
+    ascending: ['케이블 회수', 'status-moving'],
+    returning: ['귀환중', 'status-moving'],
+  };
+  const [text, cls] = states[robot.state] || ['대기중', 'status-idle'];
+  badge.textContent = text;
+  badge.className = 'status-badge ' + cls;
+}
+
+function callRobot() {
+  if(!selectedCar || robot.state !== 'idle') return;
+  robot.targetCar = selectedCar;
+  robot.state = 'moving';
+  const pos = getRailPos(selectedCar.col, selectedCar.row);
+  robot.tx = pos.x; robot.ty = pos.y;
+  log(`호출: ${selectedCar.brand} (${selectedCar.plate})`, '#60a5fa');
+  document.getElementById('call-btn').disabled = true;
+  updateStatusUI();
+}
+
+function resetSim() {
+  cancelAnimationFrame(animFrame);
+  robot.state = 'idle'; robot.cableLen = 0; robot.targetCar = null; robot.chargeTimer = 0;
+  const home = getRailPos(0, 0);
+  robot.x = home.x; robot.y = home.y; robot.tx = home.x; robot.ty = home.y;
+  cars.forEach(c => { c.state = 'idle'; c.battery = Math.max(10, c.battery - 20); });
+  selectedCar = null;
+  document.getElementById('car-info').innerHTML = '차량을 클릭하여 선택하세요';
+  document.getElementById('car-info').style.color = '#4b5563';
+  document.getElementById('charge-panel').style.display = 'none';
+  document.getElementById('call-btn').disabled = true;
+  document.getElementById('log').innerHTML = '';
+  chargeCount = 0;
+  document.getElementById('charge-count').textContent = '0회';
+  updateStatusUI();
+  log('시스템 초기화 완료', '#9ca3af');
+  lastT = performance.now();
+  animFrame = requestAnimationFrame(tick);
+}
+
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+
+  let clicked = null;
+  for(const car of cars) {
+    const cx = PAD_L + car.col * CW + CW/2;
+    const cy = PAD_T + car.row * CH + CH/2;
+    const cw = CW - 20, ch = CH - 28;
+    if(mx >= cx-cw/2 && mx <= cx+cw/2 && my >= cy-ch/2 && my <= cy+ch/2) {
+      clicked = car; break;
+    }
+  }
+
+  selectedCar = clicked;
+  const panel = document.getElementById('car-info');
+  const callBtn = document.getElementById('call-btn');
+
+  if(clicked) {
+    const pct = Math.round(clicked.battery);
+    const bc = pct < 20 ? '#ef4444' : pct < 50 ? '#f59e0b' : '#22c55e';
+    panel.innerHTML = `
+      <div style="font-size:13px;font-weight:500;color:#f9fafb;margin-bottom:4px">${clicked.brand}</div>
+      <div style="font-size:11px;color:#6b7280;margin-bottom:6px">${clicked.plate}</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div style="flex:1;height:4px;background:#374151;border-radius:2px">
+          <div style="width:${pct}%;height:4px;background:${bc};border-radius:2px"></div>
+        </div>
+        <span style="font-size:11px;color:${bc};font-weight:500">${pct}%</span>
+      </div>
+      <div style="font-size:10px;color:#4b5563;margin-top:4px">
+        ${clicked.state === 'charging' ? '충전 진행중' : clicked.battery >= 95 ? '충전 완료' : '충전 필요'}
+      </div>`;
+    callBtn.disabled = robot.state !== 'idle' || clicked.state === 'charging' || clicked.battery >= 95;
+    if(clicked.battery >= 95) callBtn.textContent = '충전 완료됨';
+    else if(clicked.state === 'charging') callBtn.textContent = '충전 진행중';
+    else callBtn.textContent = '충전 호출';
+  } else {
+    panel.innerHTML = '차량을 클릭하여 선택하세요';
+    panel.style.color = '#4b5563';
+    callBtn.disabled = true;
+    callBtn.textContent = '충전 호출';
+  }
+});
+
+const home = getRailPos(0, 0);
+robot.x = home.x; robot.y = home.y;
+robot.tx = home.x; robot.ty = home.y;
+log('시스템 시작 — 대기중', '#93c5fd');
+lastT = performance.now();
+animFrame = requestAnimationFrame(tick);
+</script>
